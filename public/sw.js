@@ -1,11 +1,12 @@
 // Frame & Voice service worker: keeps the app working offline.
 // Bump VERSION whenever you change files so users get the update.
-const VERSION = "fv-v2";
+const VERSION = "fv-v3";
 const SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
   "/transcribe-worker.js",
+  "/ask-worker.js",
   "/vendor/jspdf.umd.min.js",
   "/vendor/ffmpeg/index.js",
   "/vendor/ffmpeg/classes.js",

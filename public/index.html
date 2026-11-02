@@ -139,6 +139,21 @@ video{width:100%;max-width:100%;border-radius:8px;background:#000;display:block;
 .tx .row{gap:10px}
 .mini{display:flex;flex-direction:column;gap:2px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;flex:1 1 120px;min-width:0}
 select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:6px 8px;font-size:13px;text-transform:none;letter-spacing:0;font-weight:400}
+.tabs{display:inline-flex;align-self:flex-start;border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px;background:var(--sunk)}
+.tab{border:0;background:none;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.tab .badge{font-family:var(--f-mono);font-size:11px;color:var(--accent);margin-left:4px}
+.banner{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:8px 12px;font-size:13px}
+.banner .btn{padding:3px 8px;font-size:12px}
+.txview{display:flex;flex-direction:column;gap:2px;max-height:620px;overflow:auto;border-top:1px solid var(--line);padding-top:8px}
+.txview p{margin:0;padding:4px 0;font-size:14px;line-height:1.5;display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px}
+.txview .ts{border:0;background:var(--sunk);border-radius:4px;padding:2px 6px;font:600 11px/1.6 var(--f-mono);color:var(--muted);cursor:pointer;height:max-content;font-variant-numeric:tabular-nums}
+.txview .ts:hover{color:var(--accent)}
+.txview .sp{font-weight:600}
+.txview .empty{display:block;color:var(--muted);font-size:14px;padding:16px 0}
+.ai-row .btn{flex:1 1 calc(50% - 8px);justify-content:center}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px;font-weight:600;cursor:pointer}
+.check input{accent-color:var(--accent);width:16px;height:16px;margin-top:3px;flex:none}
 .privacy{font-size:12px;color:var(--muted);text-align:center;margin:8px 0 0}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -172,38 +187,41 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
       </label>
       <input type="file" id="videoFile" accept="video/*">
 
+      <div class="tx" id="txBox">
+        <label class="check" for="autoTx"><input type="checkbox" id="autoTx" checked> Write the transcript from the video's sound</label>
+        <span class="hint">Runs on this device when you press Process video. Skipped if you paste a transcript below. It doesn't name speakers.</span>
+        <div class="row">
+          <label class="mini" for="txLang">Language
+            <select id="txLang">
+              <option value="en" selected>English</option>
+              <option value="auto">Detect automatically</option>
+              <option value="fr">French</option><option value="de">German</option><option value="es">Spanish</option>
+              <option value="it">Italian</option><option value="pt">Portuguese</option><option value="nl">Dutch</option>
+              <option value="pl">Polish</option><option value="hi">Hindi</option><option value="ur">Urdu</option>
+              <option value="ar">Arabic</option><option value="zh">Chinese</option><option value="ja">Japanese</option>
+            </select></label>
+          <label class="mini" for="txModel">Quality
+            <select id="txModel">
+              <option value="onnx-community/whisper-base" selected>Standard (faster)</option>
+              <option value="onnx-community/whisper-small">Better (slower, bigger download)</option>
+            </select></label>
+        </div>
+        <div class="row">
+          <button class="btn small" id="txBtn" disabled>Transcribe now</button>
+          <button class="btn small" id="txStop" hidden>Stop</button>
+        </div>
+        <div class="progress" aria-hidden="true"><i id="txBar"></i></div>
+        <span class="status" id="txStatus" role="status"></span>
+      </div>
+
       <div class="field">
         <div class="row" style="justify-content:space-between">
-          <span class="label">Transcript</span>
+          <span class="label">Transcript text</span>
           <label class="btn link" for="tFile" style="font-size:13px">Load .vtt / .srt / .txt</label>
         </div>
         <input type="file" id="tFile" accept=".vtt,.srt,.txt,text/plain,text/vtt">
-        <textarea id="transcript" spellcheck="false" placeholder="Paste the transcript. Timestamps like 00:01:23, [1:23], Teams or VTT cues are lined up automatically. Without timestamps, text is spread evenly across the video."></textarea>
+        <textarea id="transcript" spellcheck="false" placeholder="Filled in automatically when the transcript is written. Or paste a Teams, Zoom or other transcript here: timestamps like 00:01:23 or [1:23] and VTT cues line up automatically."></textarea>
         <span class="hint" id="tInfo"></span>
-        <div class="tx" id="txBox">
-          <div class="row">
-            <button class="btn" id="txBtn" disabled>Transcribe from video</button>
-            <button class="btn" id="txStop" hidden>Stop</button>
-          </div>
-          <div class="row">
-            <label class="mini" for="txLang">Language
-              <select id="txLang">
-                <option value="en" selected>English</option>
-                <option value="auto">Detect automatically</option>
-                <option value="fr">French</option><option value="de">German</option><option value="es">Spanish</option>
-                <option value="it">Italian</option><option value="pt">Portuguese</option><option value="nl">Dutch</option>
-                <option value="pl">Polish</option><option value="hi">Hindi</option><option value="ur">Urdu</option>
-                <option value="ar">Arabic</option><option value="zh">Chinese</option><option value="ja">Japanese</option>
-              </select></label>
-            <label class="mini" for="txModel">Quality
-              <select id="txModel">
-                <option value="onnx-community/whisper-base" selected>Standard (faster)</option>
-                <option value="onnx-community/whisper-small">Better (slower, bigger download)</option>
-              </select></label>
-          </div>
-          <div class="progress" aria-hidden="true"><i id="txBar"></i></div>
-          <span class="status" id="txStatus" role="status">No transcript? Create one from the video's sound, on this device. No speaker names.</span>
-        </div>
       </div>
 
       <div class="field">
@@ -222,7 +240,7 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
         <span class="val" id="maxFVal">40</span>
       </div>
       <div class="row">
-        <button class="btn primary" id="extractBtn" disabled>Build timeline</button>
+        <button class="btn primary" id="extractBtn" disabled>Process video</button>
         <button class="btn" id="cancelBtn" hidden>Stop</button>
         <button class="btn" id="realignBtn">Re-align transcript</button>
       </div>
@@ -236,17 +254,28 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
         <h2 id="tlH"><span class="step">2</span>Timeline</h2>
         <span class="counts" id="counts"></span>
       </div>
+      <div class="banner" id="txBanner" hidden><span id="txBannerText"></span><button class="btn" id="txBannerStop" type="button">Stop</button></div>
       <div class="viewer" id="viewer"><div class="nofeed">The example has frames but no video. Load a recording to play it here.</div></div>
-      <p class="hint">Click a frame to jump the player there. Untick frames that add nothing. Add a note where the picture needs explaining.</p>
-      <div class="strip" id="strip"></div>
+      <div class="tabs" role="tablist" aria-label="Timeline view">
+        <button class="tab" role="tab" id="tabFrames" aria-selected="true" aria-controls="paneFrames" type="button">Frames</button>
+        <button class="tab" role="tab" id="tabText" aria-selected="false" aria-controls="paneText" type="button">Transcript<span class="badge" id="tabBadge"></span></button>
+      </div>
+      <div id="paneFrames" role="tabpanel" aria-labelledby="tabFrames">
+        <p class="hint" style="margin-bottom:6px">Click a frame to jump the player there. Untick frames that add nothing. Add a note where the picture needs explaining.</p>
+        <div class="strip" id="strip"></div>
+      </div>
+      <div id="paneText" role="tabpanel" aria-labelledby="tabText" hidden>
+        <div class="row" style="margin-bottom:8px"><button class="btn small" id="copyTx" type="button">Copy transcript</button><button class="btn small" id="saveTx" type="button">Download .txt</button><span class="status" id="txViewStatus"></span></div>
+        <div class="txview" id="txView"></div>
+      </div>
     </section>
 
     <!-- Handoff -->
     <section class="panel handoff side" aria-labelledby="hoH">
-      <h2 id="hoH"><span class="step">3</span>Hand it to any AI</h2>
+      <h2 id="hoH"><span class="step">3</span>Ask about the recording</h2>
 
       <div class="field">
-        <span class="label">What should the AI do?</span>
+        <label class="label" for="question">Your question</label>
         <textarea id="question" rows="3" placeholder="e.g. Write meeting notes with actions, citing the slide or screen each point came from."></textarea>
         <div class="chips" id="chips">
           <button class="chip" type="button">Summarise with timestamps</button>
@@ -254,16 +283,42 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
           <button class="chip" type="button">Where does what's said contradict what's shown?</button>
           <button class="chip" type="button">Write step-by-step instructions from this demo</button>
         </div>
-        <p class="hint">Optional. It goes at the top of the pack, so the AI knows what you want as soon as you paste.</p>
+      </div>
+
+      <div class="field">
+        <span class="label">Ask your own AI · best answers</span>
+        <p class="hint">Copies the recording's details with your question, then opens the site. Paste into the message box with Ctrl+V (Cmd+V on Mac) and send.</p>
+        <div class="row ai-row">
+          <button class="btn primary" type="button" data-ai="claude">Open in Claude</button>
+          <button class="btn primary" type="button" data-ai="chatgpt">Open in ChatGPT</button>
+          <button class="btn" type="button" data-ai="copilot">Open in Copilot</button>
+          <button class="btn" type="button" data-ai="gemini">Open in Gemini</button>
+        </div>
+        <span class="status" id="openStatus" role="status"></span>
       </div>
 
       <div class="divider"></div>
 
       <div class="field">
-        <span class="label">Take it to your AI</span>
-        <p class="hint">Copy the context pack and paste it into Claude, ChatGPT, Copilot or any chat. If your AI accepts files, attach the storyboard PDF as well so it can see the frames.</p>
+        <span class="label">Or ask on this device · no account</span>
+        <p class="hint">A small AI runs in your browser. About 1 GB downloads the first time, it needs Chrome or Edge on a laptop or desktop, and its answers are simpler. It reads the transcript and your on-screen notes, not the pictures.</p>
         <div class="row">
-          <button class="btn primary" id="copyPack">Copy context pack</button>
+          <button class="btn" id="askLocal" type="button">Ask on this device</button>
+          <button class="btn" id="askStop" type="button" hidden>Stop</button>
+        </div>
+        <div class="progress" id="askProg" aria-hidden="true" hidden><i id="askBar"></i></div>
+        <span class="status" id="askStatus" role="status"></span>
+        <div class="answer" id="answer" hidden></div>
+        <div class="row"><button class="btn small" id="copyAnswer" type="button" hidden>Copy answer</button></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <span class="label">Take it elsewhere</span>
+        <p class="hint">The context pack is the recording as text: what was on screen, your notes and what was said, moment by moment. The storyboard PDF adds the pictures, for AIs that accept files.</p>
+        <div class="row">
+          <button class="btn" id="copyPack">Copy context pack</button>
           <button class="btn" id="saveMd">Download .md</button>
           <button class="btn" id="savePdf">Download storyboard PDF</button>
         </div>
@@ -275,7 +330,7 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
 
       <div class="field">
         <span class="label">Getting the best answer</span>
-        <p class="hint">Text-only AIs can't see the frames, so a short line in "On screen" for the frames that matter helps most, for example "Revenue table, total row highlighted". To show one specific screen, use Copy image on that frame and paste it straight into the chat.</p>
+        <p class="hint">AIs that only get text can't see the frames, so a short line in "On screen" for the frames that matter helps most, for example "Revenue table, total row highlighted". To show one specific screen, use Copy image on that frame and paste it straight into the chat.</p>
       </div>
     </section>
   </div>
@@ -355,7 +410,7 @@ function realign(){
     state.segments = segs; state.approx = approx;
     $("tInfo").textContent = segs.length ? `${segs.length} lines found` + (approx ? " · no timestamps, so timing is approximate" : " · lined up by timestamp") : "Couldn't read any lines from that text.";
   }
-  assignSegments(); render();
+  assignSegments(); render(); renderTranscript();
 }
 
 /* ---------- rendering ---------- */
@@ -364,7 +419,7 @@ function render(){
   const inc = state.frames.filter(f => f.include).length;
   $("counts").textContent = state.frames.length ? `${state.frames.length} frames · ${inc} included` + (state.duration ? ` · ${fmt(state.duration)} long` : "") : "";
   if (!state.frames.length){
-    strip.innerHTML = `<p class="hint" style="padding:16px 0">No frames yet. Add a video and press Build timeline.</p>`; return;
+    strip.innerHTML = `<p class="hint" style="padding:16px 0">No frames yet. Add a video and press Process video.</p>`; return;
   }
   state.frames.forEach((f, i) => {
     const row = document.createElement("article"); row.className = "shot" + (f.include ? "" : " off");
@@ -421,14 +476,14 @@ function takeVideo(file){
   const compat = () => {
     if (settled) return; settled = true; state.compat = true;
     $("viewer").innerHTML = `<div class="nofeed">This browser can't play this video format, so there's no preview. Frames and transcription still work: the built-in converter reads the file instead, which is slower.</div>`;
-    setStatus("This format needs the built-in converter (about 30 MB, downloaded the first time). Press Build timeline.");
+    setStatus("This format needs the built-in converter (about 30 MB, downloaded the first time). Press Process video.");
     ready();
   };
   v.onloadedmetadata = () => {
     if (settled) return;
     if (!v.videoWidth) return compat();
     settled = true; state.duration = v.duration || 0;
-    setStatus(`Loaded ${fmt(state.duration)} of video. Press Build timeline.`); ready(); realign();
+    setStatus(`Loaded ${fmt(state.duration)} of video. Press Process video.`); ready(); realign();
   };
   v.onerror = compat;
   setTimeout(() => { if (!settled) compat(); }, 8000);
@@ -445,13 +500,13 @@ $("realignBtn").onclick = realign;
 
 /* ---------- converter (ffmpeg.wasm), used for unplayable formats and for audio ---------- */
 const FF_CORE = ["https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/", "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/"];
-let ffPromise = null, ffMounted = null, ffLog = null, ffChain = Promise.resolve(), ffBusy = false;
+let ffPromise = null, ffInst = null, ffMounted = null, ffLog = null, ffChain = Promise.resolve(), ffBusy = false;
 function getFF(){
   if (!ffPromise) ffPromise = (async () => {
     const { FFmpeg } = await import("./vendor/ffmpeg/index.js");
     let lastErr;
     for (const base of FF_CORE){
-      const ff = new FFmpeg();
+      const ff = new FFmpeg(); ffInst = ff;
       ff.on("log", ({ message }) => { if (ffLog) ffLog(message); });
       try { await ff.load({ coreURL: base + "ffmpeg-core.js", wasmURL: base + "ffmpeg-core.wasm" }); return ff; }
       catch (e) { lastErr = e; try { ff.terminate(); } catch {} }
@@ -461,7 +516,7 @@ function getFF(){
   return ffPromise;
 }
 function withFF(task){ const run = ffChain.then(async () => { ffBusy = true; try { return await task(await getFF()); } finally { ffBusy = false; ffLog = null; } }); ffChain = run.catch(() => {}); return run; }
-async function ffKill(){ if (!ffPromise) return; try { (await ffPromise).terminate(); } catch {} ffPromise = null; ffMounted = null; }
+async function ffKill(){ const f = ffInst; ffInst = null; ffPromise = null; ffMounted = null; if (f) { try { f.terminate(); } catch {} } }
 async function ffInput(ff, file){
   if (ffMounted !== file){
     if (ffMounted) { try { await ff.unmount("/in"); } catch {} }
@@ -471,13 +526,14 @@ async function ffInput(ff, file){
   }
   return "/in/" + file.name;
 }
+const timeLimit = (p, ms) => new Promise((res, rej) => { const id = setTimeout(() => rej(new Error("timeout")), ms); p.then(v => { clearTimeout(id); res(v); }, e => { clearTimeout(id); rej(e); }); });
 const hms = (h, m, x) => +h * 3600 + +m * 60 + +x;
 const durFrom = msg => { const x = msg.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/); return x ? hms(x[1], x[2], x[3]) : 0; };
 let wakeLock = null;
 async function keepAwake(on){ try { if (on && !wakeLock && navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; } } catch {} }
 
 /* ---------- frame extraction ---------- */
-let extracting = false;
+let extracting = false, convertStoppedAt = null;
 const busy = () => extracting || txRunning;
 function seek(v, t){ return new Promise(res => { let done = false; const fin = () => { if (!done){ done = true; res(); } };
   v.addEventListener("seeked", fin, { once: true }); setTimeout(fin, 4000); v.currentTime = t; }); }
@@ -514,23 +570,32 @@ async function scanNative(picker, interval){
 async function scanWithConverter(picker, interval){
   setStatus("Loading the converter (first time only, about 30 MB)...");
   return withFF(async ff => {
-    const path = await ffInput(ff, state.file);
-    // Read the length first. (Frames are grabbed one moment at a time: running the converter
-    // to the very end of a video trips a known bug in its browser build.)
+    // The converter's browser build can crash on long jobs or after many small ones, so frames are
+    // grabbed one moment at a time, the converter is restarted regularly, and a failed moment is retried.
+    let path = await ffInput(ff, state.file), uses = 0;
+    const restart = async () => { await ffKill(); ff = await timeLimit(getFF(), 90000); path = await ffInput(ff, state.file); uses = 0; };
     let dur = 0; ffLog = m => { if (!dur) dur = durFrom(m); };
-    await ff.exec(["-hide_banner", "-i", path]);
-    ffLog = null;
+    await timeLimit(ff.exec(["-hide_banner", "-i", path]), 30000);
     if (!dur) throw new Error("unknown duration");
-    const step = Math.max(2, Math.min(interval / 2, dur / 400));
-    let pts = null, lastPts = -1;
+    const step = Math.max(2, interval / 2, dur / 150);
+    let pts = null, lastPts = -1, inARow = 0; convertStoppedAt = null;
     ffLog = m => { const x = /showinfo/.test(m) && m.match(/pts_time:\s*(-?[\d.]+)/); if (x) pts = +x[1]; };
     for (let t = 0; t < dur && !cancelExtract; t += step){
-      pts = null;
-      await ff.exec(["-ss", t.toFixed(2), "-noaccurate_seek", "-copyts", "-i", path, "-an", "-sn", "-frames:v", "1",
-        "-vf", "scale='min(960,iw)':-2,showinfo", "-q:v", "5", "/frame.jpg"]);
-      let data = null; try { data = await ff.readFile("/frame.jpg"); await ff.deleteFile("/frame.jpg"); } catch {}
+      let data = null;
+      for (let attempt = 0; attempt < 2 && !data && !cancelExtract; attempt++){
+        try {
+          if (uses >= 10) await restart();
+          pts = null; uses++;
+          await timeLimit(ff.exec(["-ss", t.toFixed(2), "-noaccurate_seek", "-copyts", "-i", path, "-an", "-sn", "-frames:v", "1",
+            "-vf", "scale='min(960,iw)':-2,showinfo", "-q:v", "5", "-update", "1", "/frame.jpg"]), 20000);
+          try { data = await timeLimit(ff.readFile("/frame.jpg"), 10000); await ff.deleteFile("/frame.jpg"); } catch { data = null; }
+          if (!data || !data.length) { data = null; await restart(); }
+        } catch { data = null; try { await restart(); } catch {} }
+      }
+      if (!data){ if (++inARow >= 3){ convertStoppedAt = t; break; } continue; }
+      inARow = 0;
       const at = pts != null && pts >= 0 ? pts : t;
-      if (data && data.length && Math.abs(at - lastPts) > 0.01){
+      if (Math.abs(at - lastPts) > 0.01){
         lastPts = at;
         const bmp = await createImageBitmap(new Blob([data], { type: "image/jpeg" }));
         await picker.offer(at, bmp, bmp.width, bmp.height); bmp.close();
@@ -538,6 +603,7 @@ async function scanWithConverter(picker, interval){
       $("bar").style.width = (100 * t / dur).toFixed(1) + "%";
       setStatus(`Converting ${fmt(t)} of ${fmt(dur)} · ${picker.kept.length} frames so far`);
     }
+    await ffKill();   // start the next job (the sound) on a clean converter
     if (!picker.kept.length) throw new Error("no frames");
     return dur;
   });
@@ -570,28 +636,40 @@ $("extractBtn").onclick = async () => {
   state.frames.forEach(f => URL.revokeObjectURL(f.url));
   state.frames = frames; if (dur) state.duration = dur;
   $("bar").style.width = "100%";
-  setStatus(`${cancelExtract ? "Stopped early. " : ""}Kept ${frames.length} frames (${frames.filter(f=>f.reason==="scene").length} scene changes).`, "ok");
+  const willTx = !cancelExtract && $("autoTx").checked && state.file && !$("transcript").value.trim();
+  const partial = state.compat && convertStoppedAt != null ? ` The converter couldn't read frames after ${fmt(convertStoppedAt)}; converting the video to MP4 gives full coverage.` : "";
+  setStatus(`${cancelExtract ? "Stopped early. " : ""}Kept ${frames.length} frames (${frames.filter(f=>f.reason==="scene").length} scene changes).` + partial + (willTx ? " Writing the transcript next." : ""), partial ? "err" : "ok");
   realign();
+  if (willTx) startTx();
 };
 
 /* ---------- transcription (Whisper, on this device) ---------- */
 let txRunning = false, txWorker = null, txStopped = false, txCount = 0;
-const txStatus = (msg, kind="") => { const el = $("txStatus"); el.textContent = msg; el.className = "status " + kind; };
-const txBar = p => $("txBar").style.width = Math.max(0, Math.min(100, p * 100)).toFixed(1) + "%";
+const txStatus = (msg, kind="") => { const el = $("txStatus"); el.textContent = msg; el.className = "status " + kind;
+  if (txRunning){ $("txBanner").hidden = false; $("txBannerText").textContent = "Transcript: " + msg; } };
+const txBar = p => { $("txBar").style.width = Math.max(0, Math.min(100, p * 100)).toFixed(1) + "%"; if (txRunning) $("tabBadge").textContent = Math.round(p * 100) + "%"; };
 async function extractAudio(file, onProgress){
   try {
-    return await withFF(async ff => {
-      const path = await ffInput(ff, file);
-      let dur = state.duration || 0;
-      ffLog = m => { if (!dur) dur = durFrom(m); const y = m.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/); if (y && dur) onProgress(hms(y[1], y[2], y[3]) / dur); };
-      try { await ff.deleteFile("/audio.pcm"); } catch {}
-      await ff.exec(["-i", path, "-vn", "-sn", "-ac", "1", "-ar", "16000", "-f", "s16le", "/audio.pcm"]);
-      let data = null; try { data = await ff.readFile("/audio.pcm"); await ff.deleteFile("/audio.pcm"); } catch {}
+    return await withFF(async () => {
+      let ff = null, data = null, dur = state.duration || 0;
+      for (let attempt = 0; attempt < 2 && !data; attempt++){
+        await ffKill(); ff = await timeLimit(getFF(), 90000);
+        data = await readAudio(ff, await ffInput(ff, file));
+      }
+      await ffKill();
       if (!data || data.length < 3200) throw Object.assign(new Error("no audio"), { noAudio: true });
-      if (!state.duration && dur) state.duration = dur;
       const i16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength >> 1);
       const out = new Float32Array(i16.length); for (let i = 0; i < i16.length; i++) out[i] = i16[i] / 32768;
       return out;
+      async function readAudio(ff, path){
+      ffLog = m => { if (!dur) dur = durFrom(m); const y = m.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/); if (y && dur) onProgress(hms(y[1], y[2], y[3]) / dur); };
+        try {
+          await timeLimit(ff.exec(["-i", path, "-vn", "-sn", "-ac", "1", "-ar", "16000", "-f", "s16le", "/audio.pcm"]), Math.max(180000, (state.duration || 3600) * 300));
+          const d = await timeLimit(ff.readFile("/audio.pcm"), 60000); await ff.deleteFile("/audio.pcm");
+          if (!state.duration && dur) state.duration = dur;
+          return d;
+        } catch { return null; }
+      }
     });
   } catch (e) {
     if (e && e.noAudio) throw e;
@@ -605,10 +683,10 @@ async function extractAudio(file, onProgress){
     return out;
   }
 }
-function finishTx(){ txRunning = false; keepAwake(false); $("txBtn").disabled = !state.file; $("txStop").hidden = true; $("extractBtn").disabled = !state.file; if (txWorker){ txWorker.terminate(); txWorker = null; } }
+function finishTx(){ txRunning = false; keepAwake(false); $("txBanner").hidden = true; $("tabBadge").textContent = state.segments.length ? String(state.segments.length) : ""; $("txBtn").disabled = !state.file; $("txStop").hidden = true; $("extractBtn").disabled = !state.file; if (txWorker){ txWorker.terminate(); txWorker = null; } }
 $("txStop").onclick = () => { txStopped = true; if (ffBusy) ffKill(); if (txWorker){ txWorker.terminate(); txWorker = null; }
   finishTx(); txStatus(txCount ? `Stopped. Kept the ${txCount} lines transcribed so far.` : "Stopped."); };
-$("txBtn").onclick = async () => {
+async function startTx(){
   if (!state.file || busy()) return;
   const prev = $("transcript").value;
   txRunning = true; txStopped = false; txCount = 0; $("txBtn").disabled = true; $("txStop").hidden = false; $("extractBtn").disabled = true; keepAwake(true); txBar(0);
@@ -661,7 +739,147 @@ $("txBtn").onclick = async () => {
   };
   txWorker.onerror = e => { if (!txRunning) return; finishTx(); txStatus("The transcriber couldn't start in this browser. Try a recent Chrome, Edge or Safari.", "err"); console.error(e); };
   txWorker.postMessage({ type: "run", audio, model: $("txModel").value, language: $("txLang").value }, [audio.buffer]);
+}
+$("txBtn").onclick = () => startTx();
+$("txBannerStop").onclick = () => $("txStop").click();
+
+$("chips").onclick = e => { const c = e.target.closest(".chip"); if (c){ $("question").value = c.textContent; $("question").focus(); } };
+
+/* ---------- transcript tab ---------- */
+function selectTab(which){
+  const text = which === "text";
+  $("tabFrames").setAttribute("aria-selected", String(!text)); $("tabText").setAttribute("aria-selected", String(text));
+  $("paneFrames").hidden = text; $("paneText").hidden = !text;
+  try { localStorage.setItem("fv-tab", which); } catch {}
+}
+$("tabFrames").onclick = () => selectTab("frames");
+$("tabText").onclick = () => selectTab("text");
+try { if (localStorage.getItem("fv-tab") === "text") selectTab("text"); } catch {}
+function renderTranscript(){
+  const box = $("txView"); box.textContent = "";
+  if (!txRunning) $("tabBadge").textContent = state.segments.length ? String(state.segments.length) : "";
+  if (!state.segments.length){
+    const p = document.createElement("span"); p.className = "empty";
+    p.textContent = txRunning ? "The transcript appears here as it's written." : "No transcript yet. Load a video and press Process video to write one, or paste one into Transcript text on the left.";
+    box.append(p); return;
+  }
+  for (const sg of state.segments){
+    const p = document.createElement("p");
+    const b = document.createElement("button"); b.className = "ts"; b.type = "button"; b.textContent = fmt(sg.start);
+    b.setAttribute("aria-label", "Play from " + fmt(sg.start));
+    b.onclick = () => { const v = $("player"); if (v){ v.currentTime = sg.start; v.play().catch(() => {}); v.scrollIntoView({ block: "nearest", behavior: "smooth" }); } };
+    const t = document.createElement("span");
+    if (sg.speaker){ const sp = document.createElement("span"); sp.className = "sp"; sp.textContent = sg.speaker + ": "; t.append(sp); }
+    t.append(sg.text);
+    p.append(b, t); box.append(p);
+  }
+  if (txRunning) box.scrollTop = box.scrollHeight;
+}
+const transcriptText = () => state.segments.map(s => `${fmt(s.start)} ${s.speaker ? s.speaker + ": " : ""}${s.text}`).join("\n");
+$("copyTx").onclick = async () => {
+  if (!state.segments.length) { $("txViewStatus").textContent = "No transcript yet."; return; }
+  try { await navigator.clipboard.writeText(transcriptText()); $("txViewStatus").textContent = "Copied."; }
+  catch { $("txViewStatus").textContent = "Copy was blocked. Use Download .txt instead."; }
 };
+$("saveTx").onclick = () => { if (!state.segments.length) { $("txViewStatus").textContent = "No transcript yet."; return; }
+  save(baseName() + "-transcript.txt", new Blob([transcriptText()], { type: "text/plain;charset=utf-8" })); };
+
+/* ---------- ask your own AI ---------- */
+const AI_SITES = { claude: ["Claude", "https://claude.ai/new"], chatgpt: ["ChatGPT", "https://chatgpt.com/"], copilot: ["Copilot", "https://copilot.microsoft.com/"], gemini: ["Gemini", "https://gemini.google.com/app"] };
+const openStatus = (msg, kind="") => { const el = $("openStatus"); el.textContent = msg; el.className = "status " + kind; };
+for (const b of document.querySelectorAll("[data-ai]")) b.onclick = async () => {
+  const [name, url] = AI_SITES[b.dataset.ai];
+  if (!state.frames.some(f => f.include) && !state.segments.length) return openStatus("Load a video and press Process video first.", "err");
+  const text = packMarkdown();
+  let copied = true;
+  try { await navigator.clipboard.writeText(text); } catch { copied = false; }
+  const w = window.open(url, "_blank", "noopener");
+  if (copied) openStatus(`Copied. In ${name}, click the message box, paste (Ctrl+V, or Cmd+V on Mac) and send.` + (w === null ? ` If ${name} didn't open, your browser blocked the new tab: go to ${url.replace("https://", "")} yourself.` : "") + " To let it see the pictures too, attach the storyboard PDF from below.", "ok");
+  else { const ta = $("packFallback"); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); openStatus(`Couldn't copy automatically. The text is selected below: press Ctrl+C (Cmd+C on Mac), then paste it into ${name}.`, "err"); }
+};
+
+/* ---------- ask on this device (small local AI) ---------- */
+let askWorker = null, askRunning = false;
+const askStatus = (msg, kind="") => { const el = $("askStatus"); el.textContent = msg; el.className = "status " + kind; };
+function md(text){
+  const out = []; let inList = false;
+  for (const raw of esc(text).split("\n")){
+    const l = raw.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>");
+    const h = l.match(/^#{1,4}\s+(.*)/), li = l.match(/^\s*[-*•]\s+(.*)/) || l.match(/^\s*\d+[.)]\s+(.*)/);
+    if (li){ if (!inList){ out.push("<ul>"); inList = true; } out.push(`<li>${li[1]}</li>`); continue; }
+    if (inList){ out.push("</ul>"); inList = false; }
+    if (h) out.push(`<h4>${h[1]}</h4>`); else if (l.trim()) out.push(`<p>${l}</p>`);
+  }
+  if (inList) out.push("</ul>");
+  return out.join("");
+}
+const STOP = new Set("the and for with that this what when where which who how why are was were have has had you your our their from into about there they them then than does did can could would should will just also only more most some any all not but its it's i'm we're on in of to a an is be at by as or if so do".split(" "));
+function localContext(q, budget){
+  let blocks;
+  const fr = state.frames.filter(f => f.include);
+  if (fr.length){
+    blocks = fr.map(f => { const said = (f.said || []).map(s => (s.speaker ? s.speaker + ": " : "") + s.text).join(" ");
+      return { t: f.t, text: `[${fmt(f.t)}]` + (f.onScreen ? ` On screen: ${f.onScreen}.` : "") + (f.note ? ` Note: ${f.note}.` : "") + ` Said: ${said || "(nothing)"}` }; });
+  } else {
+    blocks = []; let cur = null;
+    for (const s of state.segments){ if (!cur || s.start - cur.t >= 120){ cur = { t: s.start, text: `[${fmt(s.start)}]` }; blocks.push(cur); } cur.text += " " + (s.speaker ? s.speaker + ": " : "") + s.text; }
+  }
+  const all = blocks.map(b => b.text).join("\n");
+  if (all.length <= budget) return { text: all, partial: false };
+  const words = (q.toLowerCase().match(/[a-z0-9£$%']{3,}/g) || []).filter(w => !STOP.has(w));
+  const scored = blocks.map((b, i) => { const low = b.text.toLowerCase(); let sc = 0; for (const w of words) sc += low.split(w).length - 1; return { b, i, sc: sc + (i === 0 || i === blocks.length - 1 ? 0.5 : 0) }; });
+  scored.sort((a, b) => b.sc - a.sc || a.i - b.i);
+  const pick = []; let used = 0;
+  for (const x of scored){ const len = Math.min(x.b.text.length, 1500) + 1; if (used + len > budget) continue; pick.push(x); used += len; }
+  pick.sort((a, b) => a.i - b.i);
+  return { text: pick.map(x => x.b.text.slice(0, 1500)).join("\n"), partial: true };
+}
+function finishAsk(){ askRunning = false; $("askLocal").disabled = false; $("askStop").hidden = true; $("askProg").hidden = true; }
+$("askStop").onclick = () => { if (askWorker){ askWorker.terminate(); askWorker = null; } finishAsk(); askStatus("Stopped."); };
+$("askLocal").onclick = () => {
+  if (askRunning) return;
+  const q = $("question").value.trim();
+  if (!q){ askStatus("Type a question first.", "err"); $("question").focus(); return; }
+  if (!state.segments.length && !state.frames.some(f => f.onScreen || f.note)){ askStatus("There's no transcript yet. Process a video first so the AI has something to read.", "err"); return; }
+  if (!navigator.gpu){ askStatus("This needs Chrome or Edge on a laptop or desktop. Use one of the Open in buttons above instead.", "err"); return; }
+  const ctx = localContext(q, 14000);
+  const messages = [
+    { role: "system", content: "You answer questions about a video recording using only the timeline provided. Each line starts with a timestamp, then what was on screen (if known) and what was said. Cite timestamps like [03:12] for each point. If the timeline doesn't contain the answer, say so plainly. Be concise and use short bullet points where helpful." },
+    { role: "user", content: `TIMELINE of "${state.videoName || "Example recording"}" (${fmt(state.duration)} long)${ctx.partial ? ", showing only the parts most related to the question" : ""}:\n${ctx.text}\n\nQUESTION: ${q}` },
+  ];
+  askRunning = true; $("askLocal").disabled = true; $("askStop").hidden = false; $("copyAnswer").hidden = true;
+  const ans = $("answer"); ans.hidden = false; ans.className = "answer placeholder"; ans.textContent = "Thinking...";
+  let text = ""; const files = new Map();
+  askStatus(ctx.partial ? "Long recording: only the parts that match your question are used." : "");
+  if (!askWorker) askWorker = new Worker("./ask-worker.js", { type: "module" });
+  askWorker.onmessage = ({ data: m }) => {
+    if (!askRunning) return;
+    if (m.type === "loading"){
+      if (m.file) files.set(m.file, { loaded: m.status === "done" ? (files.get(m.file)?.total || m.loaded) : m.loaded, total: m.total || files.get(m.file)?.total || 0 });
+      let l = 0, t = 0; files.forEach(f => { l += f.loaded; t += f.total; });
+      if (t > 5e6){ $("askProg").hidden = false; $("askBar").style.width = (100 * l / t).toFixed(1) + "%"; askStatus(`Downloading the AI (first time only) · ${(l/1048576).toFixed(0)} of ${(t/1048576).toFixed(0)} MB`); }
+    } else if (m.type === "ready"){
+      $("askProg").hidden = true; askStatus(ctx.partial ? "Reading the matching parts of the recording..." : "Reading the recording...");
+    } else if (m.type === "token"){
+      text += m.text; ans.className = "answer"; ans.innerHTML = md(text);
+    } else if (m.type === "done"){
+      finishAsk(); $("copyAnswer").hidden = !text;
+      askStatus(text ? "Answered on this device. Check important points against the recording; small AIs can get details wrong." : "The AI didn't produce an answer. Try asking more simply.", text ? "ok" : "err");
+    } else if (m.type === "error"){
+      finishAsk(); if (askWorker){ askWorker.terminate(); askWorker = null; }
+      if (!text){ ans.hidden = true; }
+      const msg = m.message || "";
+      askStatus(/NO_WEBGPU/.test(msg) ? "Your browser or graphics chip can't run the on-device AI. Use one of the Open in buttons above instead."
+        : /fetch|network|Failed/i.test(msg) ? "Couldn't download the AI. Check your connection (some work networks block it) and try again."
+        : /memory|allocate|OOM/i.test(msg) ? "This computer ran out of memory for the on-device AI. Use one of the Open in buttons above instead."
+        : "The on-device AI stopped with an error. Use one of the Open in buttons above instead.", "err");
+      console.error("[ask]", msg);
+    }
+  };
+  askWorker.onerror = e => { if (!askRunning) return; finishAsk(); askWorker = null; askStatus("The on-device AI couldn't start in this browser. Use one of the Open in buttons above instead.", "err"); console.error(e); };
+  askWorker.postMessage({ type: "ask", messages });
+};
+$("copyAnswer").onclick = async () => { try { await navigator.clipboard.writeText($("answer").innerText); askStatus("Answer copied.", "ok"); } catch { askStatus("Copy was blocked. Select the answer and copy it yourself.", "err"); } };
 
 /* ---------- exports ---------- */
 function packMarkdown(){
@@ -677,6 +895,7 @@ Length: ${fmt(state.duration)} · Moments: ${fr.length}${state.approx ? " · Tra
     const said = f.said && f.said.length ? f.said.map(s => `> ${fmt(s.start)} ${s.speaker ? "**" + s.speaker + ":** " : ""}${s.text}`).join("\n") : "> (nothing said)";
     return `## [${fmt(f.t)}] Moment ${i+1}\n**On screen:** ${f.onScreen || "(not described)"}\n${f.note ? `**Note:** ${f.note}\n` : ""}\n${said}\n`;
   }).join("\n");
+  if (!fr.length && state.segments.length) return head + "\n## Transcript\n" + transcriptText() + "\n";
   return head + "\n" + body;
 }
 async function copyText(text, okMsg){
