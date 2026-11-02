@@ -151,6 +151,10 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
 .txview .ts:hover{color:var(--accent)}
 .txview .sp{font-weight:600}
 .txview .empty{display:block;color:var(--muted);font-size:14px;padding:16px 0}
+details.more{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--sunk)}
+details.more summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)}
+details.more[open] summary{margin-bottom:8px}
+details.more .field{gap:8px}
 .ai-row .btn{flex:1 1 calc(50% - 8px);justify-content:center}
 .check{display:flex;gap:8px;align-items:flex-start;font-size:14px;font-weight:600;cursor:pointer}
 .check input{accent-color:var(--accent);width:16px;height:16px;margin-top:3px;flex:none}
@@ -167,7 +171,7 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
         <svg class="reel" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="var(--accent)" stroke-width="3"/><circle cx="20" cy="20" r="3.5" fill="var(--accent)"/><circle cx="20" cy="10" r="4" fill="var(--ink)"/><circle cx="28.7" cy="25" r="4" fill="var(--ink)"/><circle cx="11.3" cy="25" r="4" fill="var(--ink)"/></svg>
         <h1>Frame <span>&amp;</span> Voice</h1>
       </div>
-      <p class="tag">Pairs what was on screen with what was said, so an AI sees the recording instead of only reading it. Everything runs in your browser. Nothing you load is uploaded anywhere, including when it transcribes.</p>
+      <p class="tag">Pairs what was on screen with what was said, so an AI sees the recording instead of only reading it. Videos stay on your device, including when it transcribes. When you ask a question, only the transcript text and your question go to the AI.</p>
     </div>
     <div class="top-actions">
       <button class="btn" id="installBtn" hidden>Install app</button>
@@ -276,26 +280,36 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
 
       <div class="field">
         <label class="label" for="question">Your question</label>
-        <textarea id="question" rows="3" placeholder="e.g. Write meeting notes with actions, citing the slide or screen each point came from."></textarea>
+        <textarea id="question" rows="3" placeholder="e.g. What did we agree to do next, and who is doing it?"></textarea>
         <div class="chips" id="chips">
           <button class="chip" type="button">Summarise with timestamps</button>
           <button class="chip" type="button">List decisions and actions</button>
           <button class="chip" type="button">Where does what's said contradict what's shown?</button>
           <button class="chip" type="button">Write step-by-step instructions from this demo</button>
         </div>
+        <div class="row">
+          <button class="btn primary" id="askBtn" type="button">Ask</button>
+          <button class="btn" id="askStop" type="button" hidden>Stop</button>
+        </div>
+        <span class="status" id="askStatus" role="status"></span>
+        <div class="answer" id="answer" hidden></div>
+        <div class="row"><button class="btn small" id="copyAnswer" type="button" hidden>Copy answer</button></div>
+        <p class="hint">The AI reads the transcript and your on-screen notes, not the pictures. Only that text and your question are sent to it; the video stays on your device.</p>
       </div>
 
-      <div class="field">
-        <span class="label">Ask your own AI</span>
-        <p class="hint">Copies the recording's details with your question, then opens the site. Paste into the message box with Ctrl+V (Cmd+V on Mac) and send.</p>
-        <div class="row ai-row">
-          <button class="btn primary" type="button" data-ai="claude">Open in Claude</button>
-          <button class="btn primary" type="button" data-ai="chatgpt">Open in ChatGPT</button>
-          <button class="btn" type="button" data-ai="copilot">Open in Copilot</button>
-          <button class="btn" type="button" data-ai="gemini">Open in Gemini</button>
+      <details class="more" id="moreWays">
+        <summary>Other ways to ask</summary>
+        <div class="field">
+          <p class="hint">Copies the recording's details with your question, then opens the site. Paste into the message box with Ctrl+V (Cmd+V on Mac) and send. ChatGPT works without an account.</p>
+          <div class="row ai-row">
+            <button class="btn" type="button" data-ai="claude">Open in Claude</button>
+            <button class="btn" type="button" data-ai="chatgpt">Open in ChatGPT</button>
+            <button class="btn" type="button" data-ai="copilot">Open in Copilot</button>
+            <button class="btn" type="button" data-ai="gemini">Open in Gemini</button>
+          </div>
+          <span class="status" id="openStatus" role="status"></span>
         </div>
-        <span class="status" id="openStatus" role="status"></span>
-      </div>
+      </details>
 
       <div class="divider"></div>
 
@@ -320,7 +334,7 @@ select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(
       </div>
     </section>
   </div>
-  <p class="privacy">Frame &amp; Voice works offline once loaded. Videos, transcripts and frames never leave your device. Transcription uses OpenAI&#39;s open-source Whisper model, downloaded once and run on your device.</p>
+  <p class="privacy">Frame &amp; Voice works offline once loaded, apart from asking questions. Videos and frames never leave your device; the transcript text is sent only when you ask a question, to an AI model hosted by Groq. Transcription uses OpenAI&#39;s open-source Whisper model, downloaded once and run on your device.</p>
 </div>
 
 <script>
@@ -783,6 +797,98 @@ for (const b of document.querySelectorAll("[data-ai]")) b.onclick = async () => 
   if (copied) openStatus(`Copied. In ${name}, click the message box, paste (Ctrl+V, or Cmd+V on Mac) and send.` + (w === null ? ` If ${name} didn't open, your browser blocked the new tab: go to ${url.replace("https://", "")} yourself.` : "") + " To let it see the pictures too, attach the storyboard PDF from below.", "ok");
   else { const ta = $("packFallback"); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); openStatus(`Couldn't copy automatically. The text is selected below: press Ctrl+C (Cmd+C on Mac), then paste it into ${name}.`, "err"); }
 };
+
+/* ---------- ask the built-in AI ---------- */
+const askStatus = (msg, kind="") => { const el = $("askStatus"); el.textContent = msg; el.className = "status " + kind; };
+function md(text){
+  const out = []; let inList = false;
+  for (const raw of esc(text).split("\n")){
+    const l = raw.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>");
+    const h = l.match(/^#{1,4}\s+(.*)/), li = l.match(/^\s*[-*•]\s+(.*)/) || l.match(/^\s*\d+[.)]\s+(.*)/);
+    if (li){ if (!inList){ out.push("<ul>"); inList = true; } out.push(`<li>${li[1]}</li>`); continue; }
+    if (inList){ out.push("</ul>"); inList = false; }
+    if (h) out.push(`<h4>${h[1]}</h4>`); else if (l.trim()) out.push(`<p>${l}</p>`);
+  }
+  if (inList) out.push("</ul>");
+  return out.join("");
+}
+const STOP = new Set("the and for with that this what when where which who how why are was were have has had you your our their from into about there they them then than does did can could would should will just also only more most some any all not but its it's i'm we're on in of to a an is be at by as or if so do".split(" "));
+// Builds the timeline text sent to the AI. Long recordings are trimmed to the parts that best match the question.
+function askContext(q, budget){
+  let blocks;
+  const fr = state.frames.filter(f => f.include);
+  if (fr.length){
+    blocks = fr.map(f => { const said = (f.said || []).map(s => (s.speaker ? s.speaker + ": " : "") + s.text).join(" ");
+      return `[${fmt(f.t)}]` + (f.onScreen ? ` On screen: ${f.onScreen}.` : "") + (f.note ? ` Note: ${f.note}.` : "") + ` Said: ${said || "(nothing)"}`; });
+  } else {
+    blocks = []; let cur = null;
+    for (const s of state.segments){ if (!cur || s.start - cur.t >= 60){ cur = { t: s.start, text: `[${fmt(s.start)}]` }; blocks.push(cur); } cur.text += " " + (s.speaker ? s.speaker + ": " : "") + s.text; }
+    blocks = blocks.map(b => b.text);
+  }
+  // Split very long moments so trimming can pick the relevant parts.
+  blocks = blocks.flatMap(b => { if (b.length <= 1200) return [b]; const ts = b.match(/^\[[^\]]+\]/)[0]; const parts = []; for (let i = 0; i < b.length; i += 1200) parts.push((i ? ts + " (cont.) " : "") + b.slice(i, i + 1200)); return parts; });
+  const all = blocks.join("\n");
+  if (all.length <= budget) return { text: all, partial: false };
+  const words = (q.toLowerCase().match(/[a-z0-9£$%']{3,}/g) || []).filter(w => !STOP.has(w));
+  const scored = blocks.map((b, i) => { const low = b.toLowerCase(); let sc = 0; for (const w of words) sc += low.split(w).length - 1; return { b, i, sc }; });
+  // Without matching words (e.g. "summarise"), take every Nth moment so the whole recording is covered.
+  if (!scored.some(x => x.sc > 0)){
+    const k = Math.ceil(all.length / budget) + 1, pick = []; let used = 0;
+    for (let i = 0; i < blocks.length; i += k){ if (used + blocks[i].length + 1 > budget) break; pick.push(blocks[i]); used += blocks[i].length + 1; }
+    return { text: pick.join("\n"), partial: true };
+  }
+  scored.sort((a, b) => b.sc - a.sc || a.i - b.i);
+  const pick = []; let used = 0;
+  for (const x of scored){ if (used + x.b.length + 1 > budget) continue; pick.push(x); used += x.b.length + 1; }
+  pick.sort((a, b) => a.i - b.i);
+  return { text: pick.map(x => x.b).join("\n"), partial: true };
+}
+const ASK_ERRORS = {
+  not_configured: "Asking isn't set up on this site yet. Use Other ways to ask below for now.",
+  daily_limit: "Today's free AI allowance for this site has been used up. It resets within a day. Meanwhile, use Other ways to ask below.",
+  slow_down: "That's a lot of questions in a short time. Wait a few minutes, then try again.",
+  bad_key: "The site's AI key isn't working. If this is your site, check the Groq key in Vercel. Meanwhile, use Other ways to ask below.",
+  origin: "This page can't reach the AI from here. Open the site at its own address and try again.",
+  upstream: "The AI service didn't respond. Try again in a minute, or use Other ways to ask below.",
+};
+let askCtl = null;
+function finishAsk(){ askCtl = null; $("askBtn").disabled = false; $("askStop").hidden = true; }
+$("askStop").onclick = () => { if (askCtl) askCtl.abort(); };
+$("question").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("askBtn").click(); } });
+$("askBtn").onclick = async () => {
+  if (askCtl) return;
+  const q = $("question").value.trim();
+  if (!q){ askStatus("Type a question first, or pick one of the suggestions.", "err"); $("question").focus(); return; }
+  if (!state.segments.length && !state.frames.some(f => f.onScreen || f.note)){ askStatus("There's no transcript yet. Load a video and press Process video first.", "err"); return; }
+  const ctx = askContext(q, 14000);
+  askCtl = new AbortController(); $("askBtn").disabled = true; $("askStop").hidden = false; $("copyAnswer").hidden = true;
+  const ans = $("answer"); ans.hidden = false; ans.className = "answer placeholder"; ans.textContent = "Thinking...";
+  askStatus(ctx.partial ? "Long recording: the parts that best match your question are used." : "");
+  let text = "";
+  try {
+    const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, signal: askCtl.signal,
+      body: JSON.stringify({ question: q, context: ctx.text, partial: ctx.partial, title: `${state.videoName || "Example recording"}, ${fmt(state.duration)} long` }) });
+    if (!r.ok){
+      let code = "upstream"; try { code = (await r.json()).error || code; } catch {}
+      if (r.status === 404) code = "not_configured";
+      throw Object.assign(new Error(code), { code });
+    }
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    for (;;){ const { done, value } = await reader.read(); if (done) break; text += dec.decode(value, { stream: true }); ans.className = "answer"; ans.innerHTML = md(text); }
+    if (!text.trim()) throw Object.assign(new Error("empty"), { code: "upstream" });
+    askStatus((ctx.partial ? "Long recording, so only the parts that best match your question were used. " : "") + "Check important points against the recording; AI can get details wrong.", "ok");
+    $("copyAnswer").hidden = false;
+  } catch (e) {
+    if (e.name === "AbortError"){ if (!text) ans.hidden = true; askStatus("Stopped."); }
+    else {
+      if (!text) ans.hidden = true;
+      const code = e.code || (navigator.onLine ? "upstream" : "offline");
+      askStatus(code === "offline" ? "You're offline. Connect to the internet to ask questions." : (ASK_ERRORS[code] || ASK_ERRORS.upstream), "err");
+      if (["daily_limit", "not_configured", "bad_key", "upstream"].includes(code)) $("moreWays").open = true;
+    }
+  } finally { finishAsk(); }
+};
+$("copyAnswer").onclick = async () => { try { await navigator.clipboard.writeText($("answer").innerText); askStatus("Answer copied.", "ok"); } catch { askStatus("Copy was blocked. Select the answer and copy it yourself.", "err"); } };
 
 /* ---------- exports ---------- */
 function packMarkdown(){

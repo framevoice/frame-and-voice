@@ -1,6 +1,6 @@
 // Frame & Voice service worker: keeps the app working offline.
 // Bump VERSION whenever you change files so users get the update.
-const VERSION = "fv-v4";
+const VERSION = "fv-v5";
 const SHELL = [
   "/",
   "/index.html",
