@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Frame &amp; Voice</title>
+<meta name="description" content="Turn a screen or meeting recording into key frames lined up with the transcript, ready to hand to any AI.">
+<meta name="theme-color" content="#1d2733">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Frame &amp; Voice">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<script src="/vendor/jspdf.umd.min.js" defer></script>
+<style>
+/* Layout: an editing bay. Sources on the left, a contact-sheet timeline in the middle, the AI handoff on the right. */
+:root{
+  --bg:#eceef1; --surface:#ffffff; --sunk:#f5f6f8; --ink:#15181d; --muted:#5b6370; --line:#d6dae0;
+  --accent:#b86a00; --accent-ink:#ffffff; --accent-soft:#fbefdc; --tc:#1d2733; --tc-ink:#ffd27a;
+  --ok:#21794a; --warn:#a4400f;
+  --f-display:"Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --f-body:"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#101318; --surface:#181c22; --sunk:#13171c; --ink:#e8ebef; --muted:#9aa3ae; --line:#2b313a;
+  --accent:#f0a73a; --accent-ink:#1a1206; --accent-soft:#33260f; --tc:#0a0d11; --tc-ink:#ffcf6e;
+  --ok:#5fcf8f; --warn:#ff9a6a; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#101318; --surface:#181c22; --sunk:#13171c; --ink:#e8ebef; --muted:#9aa3ae; --line:#2b313a;
+  --accent:#f0a73a; --accent-ink:#1a1206; --accent-soft:#33260f; --tc:#0a0d11; --tc-ink:#ffcf6e;
+  --ok:#5fcf8f; --warn:#ff9a6a; color-scheme:dark }
+
+html{color-scheme:light}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));margin:0;padding-top:calc(20px + env(safe-area-inset-top, 0px));padding-bottom:calc(48px + env(safe-area-inset-bottom, 0px))}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1440px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand h1{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.brand h1 span{color:var(--accent)}
+.reel{width:38px;height:38px;flex:none}
+.tag{color:var(--muted);max-width:62ch;margin:6px 0 0}
+.demo-flag{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:8px 12px;font-size:14px}
+.demo-flag b{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+
+.bay{display:grid;grid-template-columns:300px minmax(0,1fr) 360px;gap:18px;align-items:start}
+@media (max-width:1180px){.bay{grid-template-columns:280px minmax(0,1fr)}.handoff{grid-column:1 / -1}}
+@media (max-width:760px){.bay{grid-template-columns:minmax(0,1fr)}}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel h2{font-size:17px;font-weight:600;display:flex;align-items:baseline;gap:8px}
+.step{font-family:var(--f-mono);font-size:11px;color:var(--accent);letter-spacing:.06em}
+.label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.side{position:sticky;top:12px}
+@media (max-width:760px){.side{position:static}}
+
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:var(--sunk);cursor:pointer}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{font-size:14px}
+.drop .fname{font-family:var(--f-mono);font-size:12px;color:var(--muted);word-break:break-all}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+textarea{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--sunk);padding:10px;resize:vertical;font-size:13px;line-height:1.45}
+#transcript{min-height:150px;font-family:var(--f-mono);font-size:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.field{display:flex;flex-direction:column;gap:4px}
+.field .val{font-family:var(--f-mono);font-size:12px;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.small{padding:5px 9px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.link{border:0;background:none;padding:0;color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+
+.progress{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;border:1px solid var(--line)}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.status{font-size:13px;color:var(--muted);min-height:1.4em}
+.status.err{color:var(--warn)}
+.status.ok{color:var(--ok)}
+
+/* Timeline */
+.viewer{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+video{width:100%;max-width:100%;border-radius:8px;background:#000;display:block;max-height:340px}
+.viewer .nofeed{aspect-ratio:16/9;max-width:100%;border-radius:8px;background:var(--sunk);border:1px solid var(--line);display:grid;place-items:center;color:var(--muted);font-size:14px;text-align:center;padding:16px}
+.tl-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.counts{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.strip{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+.shot{display:grid;grid-template-columns:200px minmax(0,1fr);gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.shot.off{opacity:.45}
+@media (max-width:560px){.shot{grid-template-columns:minmax(0,1fr)}}
+.thumb{position:relative;display:block;border:0;padding:0;background:none;cursor:pointer;border-radius:6px;overflow:hidden;aspect-ratio:16/9;max-width:100%}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.tc{position:absolute;left:6px;bottom:6px;background:var(--tc);color:var(--tc-ink);font:600 11px/1 var(--f-mono);padding:4px 6px;border-radius:4px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.fno{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.6);color:#fff;font:600 10px/1 var(--f-mono);padding:3px 5px;border-radius:3px}
+.shot-body{display:flex;flex-direction:column;gap:8px;min-width:0}
+.shot-top{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.kind{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.kind em{font-style:normal;color:var(--accent)}
+.incl{display:inline-flex;gap:6px;align-items:center;font-size:13px;cursor:pointer}
+.incl input{accent-color:var(--accent);width:16px;height:16px}
+.said{background:var(--sunk);border-radius:8px;padding:8px 10px;font-size:13px;max-height:150px;overflow:auto}
+.said p{margin:0 0 4px}
+.said .sp{font-weight:600}
+.said .t{font-family:var(--f-mono);font-size:11px;color:var(--muted);margin-right:4px}
+.said.empty{color:var(--muted);font-style:italic}
+.onscreen{min-height:44px}
+.note{width:100%;border:1px solid var(--line);border-radius:8px;background:transparent;padding:6px 10px;font-size:13px}
+
+/* Handoff */
+.answer{background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:14px;max-height:520px;overflow:auto;min-height:60px}
+.answer h3,.answer h4{font-size:15px;margin:10px 0 4px}
+.answer p{margin:0 0 8px}
+.answer ul{margin:0 0 8px;padding-left:18px}
+.answer code{font-family:var(--f-mono);font-size:12px;background:var(--surface);padding:1px 4px;border-radius:4px}
+.answer.placeholder{color:var(--muted)}
+.divider{height:1px;background:var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--sunk);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.fallback{font-family:var(--f-mono);font-size:11px;height:120px}
+.top-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.ios-hint{font-size:13px;color:var(--muted);max-width:32ch;text-align:right}
+.shot-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tx{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--sunk)}
+.tx .row{gap:10px}
+.mini{display:flex;flex-direction:column;gap:2px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;flex:1 1 120px;min-width:0}
+select{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:6px 8px;font-size:13px;text-transform:none;letter-spacing:0;font-weight:400}
+.privacy{font-size:12px;color:var(--muted);text-align:center;margin:8px 0 0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="brand">
+        <svg class="reel" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="none" stroke="var(--accent)" stroke-width="3"/><circle cx="20" cy="20" r="3.5" fill="var(--accent)"/><circle cx="20" cy="10" r="4" fill="var(--ink)"/><circle cx="28.7" cy="25" r="4" fill="var(--ink)"/><circle cx="11.3" cy="25" r="4" fill="var(--ink)"/></svg>
+        <h1>Frame <span>&amp;</span> Voice</h1>
+      </div>
+      <p class="tag">Pairs what was on screen with what was said, so an AI sees the recording instead of only reading it. Everything runs in your browser. Nothing you load is uploaded anywhere, including when it transcribes.</p>
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="installBtn" hidden>Install app</button>
+      <span class="ios-hint" id="iosHint" hidden>To install on iPhone or iPad: tap Share, then Add to Home Screen.</span>
+      <div class="demo-flag" id="demoFlag"><b>Example</b> A made-up sprint review is loaded so you can see the output. <button class="btn link" id="clearDemo">Clear it</button></div>
+    </div>
+  </header>
+
+  <div class="bay">
+    <!-- Sources -->
+    <section class="panel side" aria-labelledby="srcH">
+      <h2 id="srcH"><span class="step">1</span>Sources</h2>
+      <label class="drop" id="videoDrop" for="videoFile">
+        <strong>Video recording</strong>
+        <span class="hint">Drop an MP4, WebM or MOV, or click to choose.</span>
+        <span class="fname" id="videoName"></span>
+      </label>
+      <input type="file" id="videoFile" accept="video/*">
+
+      <div class="field">
+        <div class="row" style="justify-content:space-between">
+          <span class="label">Transcript</span>
+          <label class="btn link" for="tFile" style="font-size:13px">Load .vtt / .srt / .txt</label>
+        </div>
+        <input type="file" id="tFile" accept=".vtt,.srt,.txt,text/plain,text/vtt">
+        <textarea id="transcript" spellcheck="false" placeholder="Paste the transcript. Timestamps like 00:01:23, [1:23], Teams or VTT cues are lined up automatically. Without timestamps, text is spread evenly across the video."></textarea>
+        <span class="hint" id="tInfo"></span>
+        <div class="tx" id="txBox">
+          <div class="row">
+            <button class="btn" id="txBtn" disabled>Transcribe from video</button>
+            <button class="btn" id="txStop" hidden>Stop</button>
+          </div>
+          <div class="row">
+            <label class="mini" for="txLang">Language
+              <select id="txLang">
+                <option value="en" selected>English</option>
+                <option value="auto">Detect automatically</option>
+                <option value="fr">French</option><option value="de">German</option><option value="es">Spanish</option>
+                <option value="it">Italian</option><option value="pt">Portuguese</option><option value="nl">Dutch</option>
+                <option value="pl">Polish</option><option value="hi">Hindi</option><option value="ur">Urdu</option>
+                <option value="ar">Arabic</option><option value="zh">Chinese</option><option value="ja">Japanese</option>
+              </select></label>
+            <label class="mini" for="txModel">Quality
+              <select id="txModel">
+                <option value="onnx-community/whisper-base" selected>Standard (faster)</option>
+                <option value="onnx-community/whisper-small">Better (slower, bigger download)</option>
+              </select></label>
+          </div>
+          <div class="progress" aria-hidden="true"><i id="txBar"></i></div>
+          <span class="status" id="txStatus" role="status">No transcript? Create one from the video's sound, on this device. No speaker names.</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="label">Grab a frame at least every</span>
+        <input type="range" id="interval" min="5" max="120" step="5" value="30">
+        <span class="val" id="intervalVal">30 s</span>
+      </div>
+      <div class="field">
+        <span class="label">Scene-change sensitivity</span>
+        <input type="range" id="sens" min="1" max="10" step="1" value="6">
+        <span class="val" id="sensVal">6 of 10 · catches slide flips and app switches</span>
+      </div>
+      <div class="field">
+        <span class="label">Most frames to keep</span>
+        <input type="range" id="maxF" min="6" max="80" step="2" value="40">
+        <span class="val" id="maxFVal">40</span>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="extractBtn" disabled>Build timeline</button>
+        <button class="btn" id="cancelBtn" hidden>Stop</button>
+        <button class="btn" id="realignBtn">Re-align transcript</button>
+      </div>
+      <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+      <div class="status" id="status" role="status"></div>
+    </section>
+
+    <!-- Timeline -->
+    <section class="panel" aria-labelledby="tlH">
+      <div class="tl-head">
+        <h2 id="tlH"><span class="step">2</span>Timeline</h2>
+        <span class="counts" id="counts"></span>
+      </div>
+      <div class="viewer" id="viewer"><div class="nofeed">The example has frames but no video. Load a recording to play it here.</div></div>
+      <p class="hint">Click a frame to jump the player there. Untick frames that add nothing. Add a note where the picture needs explaining.</p>
+      <div class="strip" id="strip"></div>
+    </section>
+
+    <!-- Handoff -->
+    <section class="panel handoff side" aria-labelledby="hoH">
+      <h2 id="hoH"><span class="step">3</span>Hand it to any AI</h2>
+
+      <div class="field">
+        <span class="label">What should the AI do?</span>
+        <textarea id="question" rows="3" placeholder="e.g. Write meeting notes with actions, citing the slide or screen each point came from."></textarea>
+        <div class="chips" id="chips">
+          <button class="chip" type="button">Summarise with timestamps</button>
+          <button class="chip" type="button">List decisions and actions</button>
+          <button class="chip" type="button">Where does what's said contradict what's shown?</button>
+          <button class="chip" type="button">Write step-by-step instructions from this demo</button>
+        </div>
+        <p class="hint">Optional. It goes at the top of the pack, so the AI knows what you want as soon as you paste.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <span class="label">Take it to your AI</span>
+        <p class="hint">Copy the context pack and paste it into Claude, ChatGPT, Copilot or any chat. If your AI accepts files, attach the storyboard PDF as well so it can see the frames.</p>
+        <div class="row">
+          <button class="btn primary" id="copyPack">Copy context pack</button>
+          <button class="btn" id="saveMd">Download .md</button>
+          <button class="btn" id="savePdf">Download storyboard PDF</button>
+        </div>
+        <span class="status" id="exportStatus" role="status"></span>
+        <textarea class="fallback" id="packFallback" hidden readonly aria-label="Context pack text"></textarea>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <span class="label">Getting the best answer</span>
+        <p class="hint">Text-only AIs can't see the frames, so a short line in "On screen" for the frames that matter helps most, for example "Revenue table, total row highlighted". To show one specific screen, use Copy image on that frame and paste it straight into the chat.</p>
+      </div>
+    </section>
+  </div>
+  <p class="privacy">Frame &amp; Voice works offline once loaded. Videos, transcripts and frames never leave your device. Transcription uses OpenAI&#39;s open-source Whisper model, downloaded once and run on your device.</p>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const state = { frames: [], segments: [], duration: 0, videoName: "", videoURL: null, file: null, compat: false, demo: true, approx: false };
+let cancelExtract = false;
+
+/* ---------- helpers ---------- */
+const fmt = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return (h ? h + ":" + String(m).padStart(2,"0") : String(m).padStart(2,"0")) + ":" + String(x).padStart(2,"0"); };
+const parseTime = s => s.replace(",", ".").split(":").map(Number).reduce((a, v) => a*60 + v, 0);
+const esc = s => s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const setStatus = (msg, kind="") => { const el = $("status"); el.textContent = msg; el.className = "status " + kind; };
+const setExport = (msg, kind="") => { const el = $("exportStatus"); el.textContent = msg; el.className = "status " + kind; };
+let uid = 0;
+
+/* ---------- transcript parsing ---------- */
+function splitSpeaker(text){
+  const m = text.match(/^([A-Z][\w .'’-]{0,32}?):\s+(.*)$/);
+  return m ? { speaker: m[1].trim(), text: m[2] } : { speaker: "", text };
+}
+function parseTranscript(raw, duration){
+  const lines = raw.replace(/\r/g, "").split("\n");
+  const segs = [];
+  const cue = /^\s*((?:\d{1,2}:)?\d{1,2}:\d{2}[.,]\d{1,3})\s*-->\s*((?:\d{1,2}:)?\d{1,2}:\d{2}[.,]\d{1,3})/;
+  if (lines.some(l => cue.test(l))){
+    for (let i = 0; i < lines.length; i++){
+      const m = lines[i].match(cue); if (!m) continue;
+      const buf = []; let j = i + 1;
+      while (j < lines.length && lines[j].trim() !== "" && !cue.test(lines[j])) buf.push(lines[j++]);
+      let txt = buf.join(" "), speaker = "";
+      const v = txt.match(/<v\s+([^>]+)>/); if (v) speaker = v[1].trim();
+      txt = txt.replace(/<[^>]+>/g, "").trim();
+      if (!speaker){ const s = splitSpeaker(txt); speaker = s.speaker; txt = s.text; }
+      if (txt){ const last = segs[segs.length-1];
+        if (last && last.speaker === speaker && parseTime(m[1]) - last.end < 1.5 && last.text.length < 400){ last.text += " " + txt; last.end = parseTime(m[2]); }
+        else segs.push({ start: parseTime(m[1]), end: parseTime(m[2]), speaker, text: txt }); }
+      i = j - 1;
+    }
+    return { segs, approx: false };
+  }
+  const ts = /^\s*\[?((?:\d{1,2}:)?\d{1,2}:\d{2})(?:[.,]\d+)?\]?\s*[-–—:|]?\s*(.*)$/;
+  const teams = /^(.{1,60}?)\s+((?:\d{1,2}:)?\d{1,2}:\d{2})\s*$/;
+  let cur = null, found = false;
+  for (const line of lines){
+    let m;
+    if ((m = line.match(ts))){ found = true; if (cur) segs.push(cur); const s = splitSpeaker(m[2].trim()); cur = { start: parseTime(m[1]), speaker: s.speaker, text: s.text }; }
+    else if ((m = line.match(teams))){ found = true; if (cur) segs.push(cur); cur = { start: parseTime(m[2]), speaker: m[1].trim(), text: "" }; }
+    else if (line.trim() && cur){ const s = cur.text ? { speaker: "", text: line.trim() } : splitSpeaker(line.trim()); if (!cur.speaker && s.speaker) cur.speaker = s.speaker; cur.text = (cur.text + " " + s.text).trim(); }
+  }
+  if (cur) segs.push(cur);
+  if (found){ const out = segs.filter(s => s.text); out.forEach((s, i) => s.end = out[i+1] ? out[i+1].start : Math.max(s.start, duration)); return { segs: out, approx: false }; }
+  // No timestamps: spread across the duration by length.
+  const chunks = raw.split(/\n\s*\n|\n/).map(t => t.trim()).filter(Boolean).flatMap(p => p.length > 500 ? p.match(/[^.!?]+[.!?]+\s*|[^.!?]+$/g).map(x => x.trim()) : [p]);
+  const total = chunks.reduce((a, c) => a + c.length, 0) || 1; let t = 0; const d = duration || chunks.length * 10;
+  for (const c of chunks){ const s = splitSpeaker(c); const len = d * c.length / total; segs.push({ start: t, end: t + len, speaker: s.speaker, text: s.text }); t += len; }
+  return { segs, approx: true };
+}
+function assignSegments(){
+  const fr = state.frames; fr.forEach(f => f.said = []);
+  if (!fr.length) return;
+  for (const s of state.segments){
+    let idx = 0; for (let i = 0; i < fr.length; i++) if (fr[i].t <= s.start + 0.25) idx = i; else break;
+    fr[idx].said.push(s);
+  }
+}
+function realign(){
+  const raw = $("transcript").value;
+  if (!raw.trim()){ state.segments = []; $("tInfo").textContent = ""; }
+  else {
+    const { segs, approx } = parseTranscript(raw, state.duration);
+    state.segments = segs; state.approx = approx;
+    $("tInfo").textContent = segs.length ? `${segs.length} lines found` + (approx ? " · no timestamps, so timing is approximate" : " · lined up by timestamp") : "Couldn't read any lines from that text.";
+  }
+  assignSegments(); render();
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const strip = $("strip"); strip.textContent = "";
+  const inc = state.frames.filter(f => f.include).length;
+  $("counts").textContent = state.frames.length ? `${state.frames.length} frames · ${inc} included` + (state.duration ? ` · ${fmt(state.duration)} long` : "") : "";
+  if (!state.frames.length){
+    strip.innerHTML = `<p class="hint" style="padding:16px 0">No frames yet. Add a video and press Build timeline.</p>`; return;
+  }
+  state.frames.forEach((f, i) => {
+    const row = document.createElement("article"); row.className = "shot" + (f.include ? "" : " off");
+    const said = f.said && f.said.length
+      ? f.said.map(s => `<p><span class="t">${fmt(s.start)}</span>${s.speaker ? `<span class="sp">${esc(s.speaker)}:</span> ` : ""}${esc(s.text)}</p>`).join("")
+      : "Nothing said in this stretch.";
+    row.innerHTML = `
+      <button class="thumb" type="button" aria-label="Play from ${fmt(f.t)}"><img alt="Frame ${i+1} at ${fmt(f.t)}" src="${f.url}"><span class="tc">${fmt(f.t)}</span><span class="fno">#${i+1}</span></button>
+      <div class="shot-body">
+        <div class="shot-top"><span class="kind">${f.reason === "scene" ? "<em>Scene change</em>" : f.reason === "demo" ? "Example frame" : "Interval frame"}</span>
+          <span class="shot-actions"><button class="btn small" type="button" id="cp-${f.id}">Copy image</button>
+          <label class="incl"><input type="checkbox" id="inc-${f.id}" ${f.include ? "checked" : ""}> Include</label></span></div>
+        <textarea class="onscreen" id="os-${f.id}" rows="2" placeholder="On screen: type what's shown, if it matters (e.g. 'Revenue table, total row highlighted')">${esc(f.onScreen || "")}</textarea>
+        <div class="said${f.said && f.said.length ? "" : " empty"}">${said}</div>
+        <input class="note" id="note-${f.id}" placeholder="Your note (e.g. 'this is the old dashboard')" value="${esc(f.note || "")}">
+      </div>`;
+    row.querySelector(".thumb").onclick = () => { const v = $("player"); if (v){ v.currentTime = f.t; v.play().catch(()=>{}); v.scrollIntoView({block:"nearest", behavior:"smooth"}); } };
+    row.querySelector(`#inc-${f.id}`).onchange = e => { f.include = e.target.checked; row.classList.toggle("off", !f.include); $("counts").textContent = `${state.frames.length} frames · ${state.frames.filter(x=>x.include).length} included` + (state.duration ? ` · ${fmt(state.duration)} long` : ""); };
+    row.querySelector(`#cp-${f.id}`).onclick = e => copyImage(f, e.target);
+    row.querySelector(`#os-${f.id}`).oninput = e => f.onScreen = e.target.value;
+    row.querySelector(`#note-${f.id}`).oninput = e => f.note = e.target.value;
+    strip.appendChild(row);
+  });
+}
+
+/* ---------- inputs ---------- */
+function bindRange(id, out, fn){ const el = $(id); const upd = () => $(out).textContent = fn(+el.value); el.oninput = upd; upd(); }
+bindRange("interval", "intervalVal", v => v + " s");
+bindRange("sens", "sensVal", v => `${v} of 10 · ` + (v <= 3 ? "only big changes" : v <= 7 ? "catches slide flips and app switches" : "catches small edits and scrolling"));
+bindRange("maxF", "maxFVal", v => String(v));
+
+function clearDemo(){
+  if (!state.demo) return;
+  state.demo = false; $("demoFlag").hidden = true;
+  state.frames.forEach(f => URL.revokeObjectURL(f.url)); state.frames = [];
+  $("transcript").value = ""; state.segments = []; $("tInfo").textContent = "";
+  render();
+}
+$("clearDemo").onclick = clearDemo;
+
+function takeVideo(file){
+  if (!file) return;
+  if (!file.type.startsWith("video/") && !/\.(mp4|webm|mov|m4v|mkv|avi|3gp)$/i.test(file.name)){ setStatus("That isn't a video file. Choose an MP4, WebM or MOV.", "err"); return; }
+  if (busy()) { setStatus("Wait for the current job to finish, or press Stop, before loading another video.", "err"); return; }
+  clearDemo();
+  if (state.videoURL) URL.revokeObjectURL(state.videoURL);
+  state.videoURL = URL.createObjectURL(file); state.videoName = file.name; state.file = file; state.compat = false; state.duration = 0;
+  $("videoName").textContent = `${file.name} · ${(file.size/1048576).toFixed(1)} MB`;
+  $("viewer").innerHTML = `<video id="player" controls playsinline preload="metadata"></video>`;
+  $("extractBtn").disabled = true; $("txBtn").disabled = true;
+  setStatus("Opening the video...");
+  const v = $("player"); let settled = false;
+  const ready = () => { $("extractBtn").disabled = false; $("txBtn").disabled = false; };
+  const compat = () => {
+    if (settled) return; settled = true; state.compat = true;
+    $("viewer").innerHTML = `<div class="nofeed">This browser can't play this video format, so there's no preview. Frames and transcription still work: the built-in converter reads the file instead, which is slower.</div>`;
+    setStatus("This format needs the built-in converter (about 30 MB, downloaded the first time). Press Build timeline.");
+    ready();
+  };
+  v.onloadedmetadata = () => {
+    if (settled) return;
+    if (!v.videoWidth) return compat();
+    settled = true; state.duration = v.duration || 0;
+    setStatus(`Loaded ${fmt(state.duration)} of video. Press Build timeline.`); ready(); realign();
+  };
+  v.onerror = compat;
+  setTimeout(() => { if (!settled) compat(); }, 8000);
+  v.src = state.videoURL;
+}
+$("videoFile").onchange = e => takeVideo(e.target.files[0]);
+const vd = $("videoDrop");
+vd.ondragover = e => { e.preventDefault(); vd.classList.add("over"); };
+vd.ondragleave = () => vd.classList.remove("over");
+vd.ondrop = e => { e.preventDefault(); vd.classList.remove("over"); takeVideo(e.dataTransfer.files[0]); };
+$("tFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; if (state.demo) clearDemo(); $("transcript").value = await f.text(); realign(); };
+let tDeb; $("transcript").oninput = () => { clearTimeout(tDeb); tDeb = setTimeout(realign, 400); };
+$("realignBtn").onclick = realign;
+
+/* ---------- converter (ffmpeg.wasm), used for unplayable formats and for audio ---------- */
+const FF_CORE = ["https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/", "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm/"];
+let ffPromise = null, ffMounted = null, ffLog = null, ffChain = Promise.resolve(), ffBusy = false;
+function getFF(){
+  if (!ffPromise) ffPromise = (async () => {
+    const { FFmpeg } = await import("./vendor/ffmpeg/index.js");
+    let lastErr;
+    for (const base of FF_CORE){
+      const ff = new FFmpeg();
+      ff.on("log", ({ message }) => { if (ffLog) ffLog(message); });
+      try { await ff.load({ coreURL: base + "ffmpeg-core.js", wasmURL: base + "ffmpeg-core.wasm" }); return ff; }
+      catch (e) { lastErr = e; try { ff.terminate(); } catch {} }
+    }
+    throw lastErr || new Error("converter unavailable");
+  })().catch(e => { ffPromise = null; throw e; });
+  return ffPromise;
+}
+function withFF(task){ const run = ffChain.then(async () => { ffBusy = true; try { return await task(await getFF()); } finally { ffBusy = false; ffLog = null; } }); ffChain = run.catch(() => {}); return run; }
+async function ffKill(){ if (!ffPromise) return; try { (await ffPromise).terminate(); } catch {} ffPromise = null; ffMounted = null; }
+async function ffInput(ff, file){
+  if (ffMounted !== file){
+    if (ffMounted) { try { await ff.unmount("/in"); } catch {} }
+    else { try { await ff.createDir("/in"); } catch {} }
+    await ff.mount("WORKERFS", { files: [file] }, "/in");
+    ffMounted = file;
+  }
+  return "/in/" + file.name;
+}
+const hms = (h, m, x) => +h * 3600 + +m * 60 + +x;
+const durFrom = msg => { const x = msg.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/); return x ? hms(x[1], x[2], x[3]) : 0; };
+let wakeLock = null;
+async function keepAwake(on){ try { if (on && !wakeLock && navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; } } catch {} }
+
+/* ---------- frame extraction ---------- */
+let extracting = false;
+const busy = () => extracting || txRunning;
+function seek(v, t){ return new Promise(res => { let done = false; const fin = () => { if (!done){ done = true; res(); } };
+  v.addEventListener("seeked", fin, { once: true }); setTimeout(fin, 4000); v.currentTime = t; }); }
+function makePicker(interval, thr){
+  const small = document.createElement("canvas"); small.width = 48; small.height = 27; const sctx = small.getContext("2d", { willReadFrequently: true });
+  const big = document.createElement("canvas"); const bctx = big.getContext("2d");
+  const kept = []; let last = null, lastT = -Infinity;
+  const sig = src => { sctx.drawImage(src, 0, 0, 48, 27); const d = sctx.getImageData(0, 0, 48, 27).data; const g = new Float32Array(48*27);
+    for (let i = 0; i < g.length; i++) g[i] = (d[i*4]*0.299 + d[i*4+1]*0.587 + d[i*4+2]*0.114) / 255; return g; };
+  const diff = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; };
+  return { kept, async offer(t, src, w, h){
+    const g = sig(src); const d = last ? diff(g, last) : 1;
+    const scene = last && d > thr, due = t - lastT >= interval;
+    if (!last || scene || due){
+      const sc = Math.min(1, 1280 / (w || 1280)); big.width = Math.round((w || 1280) * sc); big.height = Math.round((h || 720) * sc);
+      bctx.drawImage(src, 0, 0, big.width, big.height);
+      const blob = await new Promise(r => big.toBlob(r, "image/jpeg", 0.82));
+      kept.push({ id: ++uid, t, blob, url: URL.createObjectURL(blob), include: true, note: "", onScreen: "", reason: scene ? "scene" : "interval", score: scene ? d + 1 : d });
+      last = g; lastT = t;
+    }
+  } };
+}
+async function scanNative(picker, interval){
+  const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto"; v.src = state.videoURL;
+  await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = rej; });
+  const dur = v.duration; const step = Math.max(0.5, Math.min(interval / 2, dur / 600));
+  for (let t = Math.min(0.1, dur/2); t < dur && !cancelExtract; t += step){
+    await seek(v, t); await picker.offer(t, v, v.videoWidth, v.videoHeight);
+    $("bar").style.width = (100 * t / dur).toFixed(1) + "%";
+    setStatus(`Scanning ${fmt(t)} of ${fmt(dur)} · ${picker.kept.length} frames so far`);
+  }
+  return dur;
+}
+async function scanWithConverter(picker, interval){
+  setStatus("Loading the converter (first time only, about 30 MB)...");
+  return withFF(async ff => {
+    const path = await ffInput(ff, state.file);
+    // Read the length first. (Frames are grabbed one moment at a time: running the converter
+    // to the very end of a video trips a known bug in its browser build.)
+    let dur = 0; ffLog = m => { if (!dur) dur = durFrom(m); };
+    await ff.exec(["-hide_banner", "-i", path]);
+    ffLog = null;
+    if (!dur) throw new Error("unknown duration");
+    const step = Math.max(2, Math.min(interval / 2, dur / 400));
+    let pts = null, lastPts = -1;
+    ffLog = m => { const x = /showinfo/.test(m) && m.match(/pts_time:\s*(-?[\d.]+)/); if (x) pts = +x[1]; };
+    for (let t = 0; t < dur && !cancelExtract; t += step){
+      pts = null;
+      await ff.exec(["-ss", t.toFixed(2), "-noaccurate_seek", "-copyts", "-i", path, "-an", "-sn", "-frames:v", "1",
+        "-vf", "scale='min(960,iw)':-2,showinfo", "-q:v", "5", "/frame.jpg"]);
+      let data = null; try { data = await ff.readFile("/frame.jpg"); await ff.deleteFile("/frame.jpg"); } catch {}
+      const at = pts != null && pts >= 0 ? pts : t;
+      if (data && data.length && Math.abs(at - lastPts) > 0.01){
+        lastPts = at;
+        const bmp = await createImageBitmap(new Blob([data], { type: "image/jpeg" }));
+        await picker.offer(at, bmp, bmp.width, bmp.height); bmp.close();
+      }
+      $("bar").style.width = (100 * t / dur).toFixed(1) + "%";
+      setStatus(`Converting ${fmt(t)} of ${fmt(dur)} · ${picker.kept.length} frames so far`);
+    }
+    if (!picker.kept.length) throw new Error("no frames");
+    return dur;
+  });
+}
+$("cancelBtn").onclick = () => { cancelExtract = true; };
+$("extractBtn").onclick = async () => {
+  if (!state.file || busy()) return;
+  cancelExtract = false; extracting = true; $("extractBtn").disabled = true; $("cancelBtn").hidden = false; $("txBtn").disabled = true; keepAwake(true);
+  const interval = +$("interval").value, maxF = +$("maxF").value;
+  const picker = makePicker(interval, 0.24 - (+$("sens").value) * 0.021);   // sensitivity 1 → 0.22, 10 → 0.03
+  let dur = 0, failed = null;
+  try { dur = state.compat ? await scanWithConverter(picker, interval) : await scanNative(picker, interval); }
+  catch (e) { if (!cancelExtract) failed = e; }
+  extracting = false; keepAwake(false);
+  $("cancelBtn").hidden = true; $("extractBtn").disabled = false; $("txBtn").disabled = false;
+  if (failed && !picker.kept.length){
+    const offline = !navigator.onLine || /fetch|network|import|load/i.test(String(failed && failed.message || failed));
+    setStatus(state.compat && offline ? "Couldn't download the converter. Check your connection and try again, or convert the video to MP4 first."
+      : "Couldn't read frames from this video. Converting it to MP4 (H.264) usually fixes this.", "err");
+    return;
+  }
+  let frames = picker.kept;
+  if (frames.length > maxF){
+    const first = frames[0];
+    const rest = frames.slice(1).sort((a, b) => b.score - a.score);
+    const keep = new Set([first, ...rest.slice(0, maxF - 1)]);
+    frames.forEach(f => { if (!keep.has(f)) URL.revokeObjectURL(f.url); });
+    frames = frames.filter(f => keep.has(f));
+  }
+  state.frames.forEach(f => URL.revokeObjectURL(f.url));
+  state.frames = frames; if (dur) state.duration = dur;
+  $("bar").style.width = "100%";
+  setStatus(`${cancelExtract ? "Stopped early. " : ""}Kept ${frames.length} frames (${frames.filter(f=>f.reason==="scene").length} scene changes).`, "ok");
+  realign();
+};
+
+/* ---------- transcription (Whisper, on this device) ---------- */
+let txRunning = false, txWorker = null, txStopped = false, txCount = 0;
+const txStatus = (msg, kind="") => { const el = $("txStatus"); el.textContent = msg; el.className = "status " + kind; };
+const txBar = p => $("txBar").style.width = Math.max(0, Math.min(100, p * 100)).toFixed(1) + "%";
+async function extractAudio(file, onProgress){
+  try {
+    return await withFF(async ff => {
+      const path = await ffInput(ff, file);
+      let dur = state.duration || 0;
+      ffLog = m => { if (!dur) dur = durFrom(m); const y = m.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/); if (y && dur) onProgress(hms(y[1], y[2], y[3]) / dur); };
+      try { await ff.deleteFile("/audio.pcm"); } catch {}
+      await ff.exec(["-i", path, "-vn", "-sn", "-ac", "1", "-ar", "16000", "-f", "s16le", "/audio.pcm"]);
+      let data = null; try { data = await ff.readFile("/audio.pcm"); await ff.deleteFile("/audio.pcm"); } catch {}
+      if (!data || data.length < 3200) throw Object.assign(new Error("no audio"), { noAudio: true });
+      if (!state.duration && dur) state.duration = dur;
+      const i16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength >> 1);
+      const out = new Float32Array(i16.length); for (let i = 0; i < i16.length; i++) out[i] = i16[i] / 32768;
+      return out;
+    });
+  } catch (e) {
+    if (e && e.noAudio) throw e;
+    if (txStopped) throw e;
+    // Converter unavailable: fall back to the browser's own decoder (works for common formats).
+    if (file.size > 800 * 1048576) throw Object.assign(new Error("too big"), { tooBig: true });
+    const ctx = new OfflineAudioContext(1, 16000, 16000);
+    const ab = await ctx.decodeAudioData(await file.arrayBuffer());
+    const n = ab.length, out = new Float32Array(n);
+    for (let c = 0; c < ab.numberOfChannels; c++){ const d = ab.getChannelData(c); for (let i = 0; i < n; i++) out[i] += d[i] / ab.numberOfChannels; }
+    return out;
+  }
+}
+function finishTx(){ txRunning = false; keepAwake(false); $("txBtn").disabled = !state.file; $("txStop").hidden = true; $("extractBtn").disabled = !state.file; if (txWorker){ txWorker.terminate(); txWorker = null; } }
+$("txStop").onclick = () => { txStopped = true; if (ffBusy) ffKill(); if (txWorker){ txWorker.terminate(); txWorker = null; }
+  finishTx(); txStatus(txCount ? `Stopped. Kept the ${txCount} lines transcribed so far.` : "Stopped."); };
+$("txBtn").onclick = async () => {
+  if (!state.file || busy()) return;
+  const prev = $("transcript").value;
+  txRunning = true; txStopped = false; txCount = 0; $("txBtn").disabled = true; $("txStop").hidden = false; $("extractBtn").disabled = true; keepAwake(true); txBar(0);
+  txStatus("Reading the sound from the video...");
+  let audio;
+  try { audio = await extractAudio(state.file, p => { txBar(0.1 * p); txStatus(`Reading the sound from the video · ${Math.round(p * 100)}%`); }); }
+  catch (e) {
+    if (txStopped) return;
+    finishTx();
+    txStatus(e && e.noAudio ? "This video has no sound track to transcribe." : e && e.tooBig ? "Couldn't download the converter, and this file is too big for the browser to read on its own. Check your connection and try again."
+      : "Couldn't read the sound from this video. Converting it to MP4 usually fixes this.", "err");
+    return;
+  }
+  if (txStopped) return;
+  const audioSecs = audio.length / 16000;
+  const lines = []; const files = new Map(); const t0 = performance.now(); let tStart = 0;
+  txStatus("Loading the speech model...");
+  txWorker = new Worker("./transcribe-worker.js", { type: "module" });
+  txWorker.onmessage = ({ data: m }) => {
+    if (!txRunning) return;
+    if (m.type === "loading"){
+      if (m.file) files.set(m.file, { loaded: m.status === "done" ? (files.get(m.file)?.total || m.loaded) : m.loaded, total: m.total || files.get(m.file)?.total || 0 });
+      let l = 0, t = 0; files.forEach(f => { l += f.loaded; t += f.total; });
+      if (t > 2e6){ txBar(0.1 + 0.15 * l / t); txStatus(`Downloading the speech model (first time only) · ${(l/1048576).toFixed(0)} of ${(t/1048576).toFixed(0)} MB`); }
+    } else if (m.type === "ready"){
+      tStart = performance.now(); txBar(0.25); txStatus(`Transcribing${m.device === "webgpu" ? " with your graphics chip" : ""}...`);
+    } else if (m.type === "segments"){
+      for (const sg of m.segs) lines.push(`${fmt(sg.start)} ${sg.text}`); txCount = lines.length;
+      if (lines.length){ if (state.demo) clearDemo(); $("transcript").value = lines.join("\n"); }
+      txBar(0.25 + 0.75 * m.done);
+      const el = (performance.now() - (tStart || t0)) / 1000, left = m.done > 0.03 ? el / m.done * (1 - m.done) : 0;
+      txStatus(`Transcribed ${fmt(m.at)} of ${fmt(audioSecs)}` + (left > 5 ? ` · about ${left > 90 ? Math.round(left / 60) + " min" : Math.round(left) + " s"} left` : "") + ". Keep this tab open.");
+      clearTimeout(tDeb); tDeb = setTimeout(realign, 300);
+    } else if (m.type === "done"){
+      finishTx(); txBar(1); realign();
+      const secs = (performance.now() - t0) / 1000, took = secs < 60 ? "under a minute" : `about ${Math.round(secs / 60)} min`;
+      if (!lines.length){ $("transcript").value = prev; realign(); txStatus("No speech was found in this video.", "err"); return; }
+      txStatus(`Done: ${lines.length} lines from ${fmt(audioSecs)} of audio in ${took}. Check names and jargon in the text above.`, "ok");
+      if (prev.trim() && prev !== $("transcript").value){
+        const b = document.createElement("button"); b.className = "btn link"; b.textContent = "Undo";
+        b.onclick = () => { $("transcript").value = prev; realign(); txStatus("Restored your previous transcript."); };
+        $("txStatus").append(" ", b);
+      }
+    } else if (m.type === "error"){
+      finishTx();
+      const net = /fetch|network|load|Failed/i.test(m.message || "");
+      txStatus(net && !lines.length ? "Couldn't download the speech model. Check your connection (some work networks block it) and try again." : "Transcription stopped with an error. Try the Standard quality, or a shorter video.", "err");
+      console.error("[transcribe]", m.message);
+    }
+  };
+  txWorker.onerror = e => { if (!txRunning) return; finishTx(); txStatus("The transcriber couldn't start in this browser. Try a recent Chrome, Edge or Safari.", "err"); console.error(e); };
+  txWorker.postMessage({ type: "run", audio, model: $("txModel").value, language: $("txLang").value }, [audio.buffer]);
+};
+
+/* ---------- exports ---------- */
+function packMarkdown(){
+  const fr = state.frames.filter(f => f.include);
+  const req = $("question").value.trim();
+  const head = `# Video context pack: ${state.videoName || "Example recording"}
+${req ? `\n## My request\n${req}\n` : ""}
+How to read this: a video recording converted to text. Each section is one moment, with its timestamp, a description of what was on screen, any note from the person who recorded it, and the words spoken until the next moment. Treat "On screen" as what you would have seen. Cite timestamps when you answer.
+
+Length: ${fmt(state.duration)} · Moments: ${fr.length}${state.approx ? " · Transcript had no timestamps, so speech timing is approximate" : ""}
+`;
+  const body = fr.map((f, i) => {
+    const said = f.said && f.said.length ? f.said.map(s => `> ${fmt(s.start)} ${s.speaker ? "**" + s.speaker + ":** " : ""}${s.text}`).join("\n") : "> (nothing said)";
+    return `## [${fmt(f.t)}] Moment ${i+1}\n**On screen:** ${f.onScreen || "(not described)"}\n${f.note ? `**Note:** ${f.note}\n` : ""}\n${said}\n`;
+  }).join("\n");
+  return head + "\n" + body;
+}
+async function copyText(text, okMsg){
+  try { await navigator.clipboard.writeText(text); setExport(okMsg, "ok"); $("packFallback").hidden = true; }
+  catch { const ta = $("packFallback"); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); setExport("Copy was blocked here. The text is selected below; press Ctrl+C / Cmd+C.", "err"); }
+}
+$("copyPack").onclick = () => { if (!state.frames.some(f => f.include)) return setExport("Include at least one frame.", "err"); copyText(packMarkdown(), "Context pack copied. Paste it into any AI chat."); };
+const baseName = () => (state.videoName || "example-recording").replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "-").slice(0, 60);
+function save(filename, data){
+  const blob = data instanceof Blob ? data : new Blob([data], { type: "text/markdown;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  setExport(`Downloaded ${filename}.`, "ok");
+}
+async function copyImage(f, btn){
+  try {
+    const bmp = await createImageBitmap(f.blob); const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+    c.getContext("2d").drawImage(bmp, 0, 0);
+    const png = await new Promise(r => c.toBlob(r, "image/png"));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    const old = btn.textContent; btn.textContent = "Copied"; setTimeout(() => btn.textContent = old, 1500);
+  } catch { setExport("This browser won't copy images. Download the storyboard PDF instead.", "err"); }
+}
+$("saveMd").onclick = () => { if (!state.frames.some(f => f.include)) return setExport("Include at least one frame.", "err"); save(baseName() + "-context.md", packMarkdown()); };
+const toDataURL = blob => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+const latin = s => (s || "").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/…/g, "...").replace(/[^\x00-\xFF]/g, "");
+$("savePdf").onclick = async () => {
+  const fr = state.frames.filter(f => f.include);
+  if (!fr.length) return setExport("Include at least one frame.", "err");
+  if (!window.jspdf){ setExport("The PDF builder didn't load. Use Save .md instead.", "err"); return; }
+  setExport("Building the PDF...");
+  const doc = new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const W = 297, M = 12, imgW = 128, rowH = 88;
+  const header = (first) => { doc.setFont("helvetica", "bold"); doc.setFontSize(first ? 15 : 10);
+    doc.text(latin(first ? `Storyboard: ${state.videoName || "Example recording"}` : (state.videoName || "Storyboard")), M, 12);
+    if (first){ doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(90); doc.text(latin(`${fmt(state.duration)} long · ${fr.length} moments · frames with what was on screen and what was said`), M, 18); doc.setTextColor(0); } };
+  header(true);
+  for (let i = 0; i < fr.length; i++){
+    const slot = i % 2; if (i && !slot){ doc.addPage(); header(false); }
+    const f = fr[i], y = 24 + slot * (rowH + 4);
+    const img = await toDataURL(f.blob); const props = doc.getImageProperties(img);
+    const h = Math.min(rowH - 6, imgW * props.height / props.width);
+    doc.addImage(img, "JPEG", M, y, imgW, h);
+    const x = M + imgW + 8, tw = W - x - M; let ty = y + 5;
+    doc.setFont("courier", "bold"); doc.setFontSize(11); doc.text(`[${fmt(f.t)}]  Moment ${i+1}`, x, ty); ty += 6;
+    const block = (label, text, size) => { if (!text) return; doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(120); doc.text(label.toUpperCase(), x, ty); ty += 4;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(size); doc.setTextColor(0);
+      const lines = doc.splitTextToSize(latin(text), tw); const room = Math.floor((y + rowH - ty) / (size * 0.42)) - 1;
+      const shown = lines.slice(0, Math.max(0, room)); if (lines.length > shown.length && shown.length) shown[shown.length-1] += " ...";
+      doc.text(shown, x, ty); ty += shown.length * size * 0.42 + 3; };
+    block("On screen", f.onScreen, 9.5);
+    block("Note", f.note, 9.5);
+    block("Said", f.said && f.said.length ? f.said.map(s => `${fmt(s.start)} ${s.speaker ? s.speaker + ": " : ""}${s.text}`).join("\n") : "(nothing said)", 9);
+  }
+  save(baseName() + "-storyboard.pdf", doc.output("blob"));
+};
+
+/* ---------- example recording ---------- */
+async function buildDemo(){
+  const slides = [
+    { t: 2, title: "Sprint 14 review", sub: "Customer data team · 3 stories demoed", kind: "title" },
+    { t: 41, title: "Support tickets by month", kind: "bars", data: [["May",412],["Jun",455],["Jul",498],["Aug",530],["Sep",611],["Oct",587]] },
+    { t: 88, title: "Orders table — validation", kind: "table", rows: [["Check","Legacy","New","Status"],["Row count","48,210","48,210","Match"],["Total revenue","£12.41m","£12.44m","Diff £30k"],["Open orders","587","587","Match"]] },
+    { t: 131, title: "models/orders_daily.sql", kind: "code", lines: ["select order_id,","       sum(net_amount) as revenue,","       max(updated_at) as last_update","from stg_order_lines","where updated_at <= :reporting_date","group by order_id"] },
+    { t: 176, title: "Next sprint", kind: "board", cols: [["To do",["Fix FX rounding","UAT sign-off"]],["Doing",["Backfill 2023"]],["Done",["Row-count checks","Monthly bars"]]] },
+  ];
+  const c = document.createElement("canvas"); c.width = 1280; c.height = 720; const x = c.getContext("2d");
+  const frames = [];
+  for (const s of slides){
+    x.fillStyle = "#f7f8fa"; x.fillRect(0, 0, 1280, 720);
+    x.fillStyle = "#1d2733"; x.fillRect(0, 0, 1280, 64); x.fillStyle = "#ffd27a"; x.font = "600 22px sans-serif"; x.fillText("● REC  Teams · Sprint review", 28, 41);
+    x.fillStyle = "#15181d";
+    if (s.kind === "title"){ x.font = "800 76px sans-serif"; x.fillText(s.title, 90, 340); x.font = "32px sans-serif"; x.fillStyle = "#5b6370"; x.fillText(s.sub, 92, 400); x.fillStyle = "#b86a00"; x.fillRect(92, 430, 160, 8); }
+    else { x.font = "700 44px sans-serif"; x.fillText(s.title, 70, 140); }
+    if (s.kind === "bars"){ const max = 700; s.data.forEach(([m, v], i) => { const h = v / max * 400, bx = 120 + i * 175; x.fillStyle = i === 4 ? "#b86a00" : "#8a97a8"; x.fillRect(bx, 640 - h, 110, h); x.fillStyle = "#15181d"; x.font = "26px sans-serif"; x.fillText(m, bx + 28, 680); x.font = "600 24px sans-serif"; x.fillText(String(v), bx + 30, 628 - h); }); }
+    if (s.kind === "table"){ s.rows.forEach((r, i) => r.forEach((cell, j) => { const cx = 80 + j * 290, cy = 220 + i * 90; x.fillStyle = i === 0 ? "#1d2733" : (cell === "Diff £30k" ? "#fbe0d2" : "#ffffff"); x.fillRect(cx, cy, 280, 80); x.fillStyle = i === 0 ? "#ffd27a" : "#15181d"; x.font = (i === 0 ? "600 " : "") + "28px sans-serif"; x.fillText(cell, cx + 18, cy + 50); })); }
+    if (s.kind === "code"){ x.fillStyle = "#1d2733"; x.fillRect(70, 180, 1140, 460); x.font = "28px monospace"; s.lines.forEach((l, i) => { x.fillStyle = i === 4 ? "#ffd27a" : "#dfe6ee"; x.fillText(l, 100, 240 + i * 56); }); x.strokeStyle = "#f0a73a"; x.lineWidth = 4; x.strokeRect(84, 446, 760, 52); }
+    if (s.kind === "board"){ s.cols.forEach(([h, items], i) => { const cx = 80 + i * 380; x.fillStyle = "#e3e7ec"; x.fillRect(cx, 190, 350, 460); x.fillStyle = "#15181d"; x.font = "600 30px sans-serif"; x.fillText(h, cx + 20, 236); items.forEach((it, k) => { x.fillStyle = "#ffffff"; x.fillRect(cx + 18, 262 + k * 110, 314, 92); x.fillStyle = "#15181d"; x.font = "26px sans-serif"; x.fillText(it, cx + 36, 318 + k * 110); }); }); }
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+    frames.push({ id: ++uid, t: s.t, blob, url: URL.createObjectURL(blob), include: true, note: "", onScreen: "", reason: "demo" });
+  }
+  if (!state.demo) { frames.forEach(f => URL.revokeObjectURL(f.url)); return; }
+  frames[2].note = "The £30k gap is the FX rounding issue";
+  state.frames = frames; state.duration = 214; state.videoName = "";
+  $("transcript").value = `00:00:03 Priya: Morning all, this is the sprint 14 review, we've got three things to show.
+00:00:42 Priya: So this is support tickets by month. You can see September jumps right up here.
+00:00:58 Tom: Is that real or is that the backfill?
+00:01:05 Priya: Real, it lines up with the pricing change.
+00:01:29 Dan: Here's the validation against legacy. Counts match, but look at this one, revenue is off.
+00:01:47 Dan: It's about thirty grand, we think it's currency conversion.
+00:02:12 Dan: And this is the model. The key bit is this filter on the reporting date.
+00:02:40 Tom: Can we make sure that's parameterised for UAT?
+00:02:57 Priya: For next sprint, the rounding fix goes first, then sign-off with Finance.`;
+  realign();
+}
+render(); buildDemo();
+
+/* ---------- installable app ---------- */
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("installBtn").hidden = false; });
+$("installBtn").onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; $("installBtn").hidden = true; };
+window.addEventListener("appinstalled", () => $("installBtn").hidden = true);
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone) $("iosHint").hidden = false;
+if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+})();
+</script>
+</body>
+</html>
