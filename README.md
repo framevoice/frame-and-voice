@@ -4,7 +4,7 @@ Turns a screen or meeting recording into key frames lined up with the transcript
 
 - Runs entirely in the browser. Videos, transcripts and frames never leave the user's device.
 - **Process video**: grabs the key frames, then writes a timestamped transcript from the video's sound (OpenAI's open-source Whisper model, run on the user's own device) unless a transcript was pasted. Free, no account, nothing uploaded. The Transcript tab shows the full transcript.
-- **Ask about the recording**: "Open in Claude / ChatGPT / Copilot / Gemini" copies everything with the question and opens that site to paste into (best answers, uses the person's own AI account). "Ask on this device" answers with a small open-source AI running in the browser instead (no account; about 1 GB download the first time; needs Chrome or Edge on a laptop or desktop; simpler answers).
+- **Ask about the recording**: "Open in Claude / ChatGPT / Copilot / Gemini" copies everything with the question and opens that site to paste into. Uses the person's own AI account; nothing heavy runs on their computer.
 - **Any common video format**: if the browser can't play a file (for example iPhone .MOV/HEVC in Chrome), a built-in converter reads it instead.
 - No server, no API keys, no sign-in. Hosting on Vercel's free (Hobby) plan costs nothing.
 - Installable as an app on desktop (Chrome, Edge) and phones (Android: Install app; iPhone: Share, then Add to Home Screen). Works offline once loaded, including transcription after the first use.
@@ -15,7 +15,6 @@ Turns a screen or meeting recording into key frames lined up with the transcript
 vercel.json                   Tells Vercel to serve public/ and sets the headers transcription needs
 public/index.html             The app
 public/transcribe-worker.js   Speech-to-text (runs in the background)
-public/ask-worker.js          On-device question answering (runs in the background)
 public/sw.js                  Offline support for the installed app
 public/manifest.webmanifest   App name and icons for installing
 public/vendor/                Libraries: PDF maker, video converter, speech-to-text engine
@@ -55,11 +54,10 @@ To rename the address, open the project's **Settings**, then **Domains**.
 - It uses the computer's graphics chip where the browser allows it (recent Chrome and Edge), otherwise the processor. As a rough guide, an hour of audio takes 5–15 minutes on a recent laptop, longer on older machines. Phones are fine for short clips.
 - It writes what was said with timestamps but doesn't label speakers. If a Teams or Zoom transcript exists, that's still the better choice, because it has names.
 - Some work networks block Hugging Face. If the download fails at work, try from home or ask IT to allow `huggingface.co`.
-- **Ask on this device** downloads a small language model (Llama 3.2 1B, or SmolLM2 1.7B as a fallback) from Hugging Face the first time, about 1 GB, then keeps it. It reads the transcript and on-screen notes, not the pictures. For long recordings it uses the parts that best match the question.
 - The video converter downloads once (about 30 MB) from the jsDelivr code CDN when a file needs converting or when transcribing.
 
 ## Making changes later
 Edit files in `public/`. If you change anything, bump `VERSION` at the top of `public/sw.js` (for example `fv-v3` to `fv-v4`) so installed apps pick up the new version.
 
 ## Credits
-Whisper (OpenAI, MIT licence), Llama 3.2 (Meta, Llama 3.2 Community Licence) and SmolLM2 (Hugging Face, Apache 2.0) via Transformers.js (Hugging Face, Apache 2.0); ffmpeg.wasm (MIT, with FFmpeg under LGPL/GPL); jsPDF (MIT).
+Whisper (OpenAI, MIT licence) via Transformers.js (Hugging Face, Apache 2.0); ffmpeg.wasm (MIT, with FFmpeg under LGPL/GPL); jsPDF (MIT).
